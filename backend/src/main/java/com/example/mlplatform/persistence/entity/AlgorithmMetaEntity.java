@@ -1,16 +1,25 @@
-package com.example.mlplatform.dto.response;
+package com.example.mlplatform.persistence.entity;
 
-import java.util.List;
-import java.util.Map;
+import java.time.LocalDateTime;
 
-public class AlgorithmMetaResponse {
+public class AlgorithmMetaEntity {
 
+    private Long id;
     private String code;
     private String name;
     private String category;
     private String learningType;
     private String description;
-    private List<Map<String, Object>> paramsSchema;
+    private String paramsSchemaJson;
+    private LocalDateTime createdAt;
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
 
     public String getCode() {
         return code;
@@ -52,11 +61,19 @@ public class AlgorithmMetaResponse {
         this.description = description;
     }
 
-    public List<Map<String, Object>> getParamsSchema() {
-        return paramsSchema;
+    public String getParamsSchemaJson() {
+        return paramsSchemaJson;
     }
 
-    public void setParamsSchema(List<Map<String, Object>> paramsSchema) {
-        this.paramsSchema = paramsSchema;
+    public void setParamsSchemaJson(String paramsSchemaJson) {
+        this.paramsSchemaJson = paramsSchemaJson;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
     }
 }

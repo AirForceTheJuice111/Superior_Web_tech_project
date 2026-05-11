@@ -4,6 +4,18 @@ server:
 spring:
   application:
     name: mlplatform-backend
+  datasource:
+    url: jdbc:h2:file:./data/mlplatform;MODE=MYSQL;DB_CLOSE_DELAY=-1;AUTO_SERVER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  sql:
+    init:
+      mode: always
+
+mybatis:
+  mapper-locations: classpath:/mapper/*.xml
+  type-aliases-package: com.example.mlplatform.persistence.entity
 
 springdoc:
   swagger-ui:
@@ -12,8 +24,8 @@ springdoc:
 app:
   cors:
     allowed-origins:
-      - http://localhost:5173
-      - http://127.0.0.1:5173
+      - http://localhost:4200
+      - http://127.0.0.1:4200
   python:
     base-url: http://localhost:8000
     timeout-ms: 5000

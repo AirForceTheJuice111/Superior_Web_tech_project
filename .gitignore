@@ -31,6 +31,7 @@ pnpm-debug.log*
 # =========================
 node_modules/
 dist/
+.angular/
 .vite/
 coverage/
 
@@ -42,6 +43,7 @@ backend/target/
 *.jar
 *.war
 *.ear
+data/
 
 # =========================
 # Python

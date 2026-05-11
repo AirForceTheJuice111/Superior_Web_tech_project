@@ -13,8 +13,13 @@ import com.example.mlplatform.model.PointData;
 import com.example.mlplatform.model.PredictionResult;
 import com.example.mlplatform.model.TrainingSession;
 import com.example.mlplatform.model.VisualizationData;
+import com.example.mlplatform.persistence.entity.TrainingSessionEntity;
+import com.example.mlplatform.persistence.mapper.TrainingSessionMapper;
 import com.example.mlplatform.service.TrainingService;
 import com.example.mlplatform.service.TrainingStreamService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Service;
 
@@ -29,17 +34,23 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class TrainingServiceImpl implements TrainingService {
 
-    private final Map<String, TrainingSession> sessions = new ConcurrentHashMap<>();
+    private final Map<String, TrainingSession> sessionCache = new ConcurrentHashMap<>();
     private final PythonTrainingClient pythonTrainingClient;
     private final TaskExecutor taskExecutor;
     private final TrainingStreamService trainingStreamService;
+    private final TrainingSessionMapper trainingSessionMapper;
+    private final ObjectMapper objectMapper;
 
     public TrainingServiceImpl(PythonTrainingClient pythonTrainingClient,
                                TaskExecutor taskExecutor,
-                               TrainingStreamService trainingStreamService) {
+                               TrainingStreamService trainingStreamService,
+                               TrainingSessionMapper trainingSessionMapper,
+                               ObjectMapper objectMapper) {
         this.pythonTrainingClient = pythonTrainingClient;
         this.taskExecutor = taskExecutor;
         this.trainingStreamService = trainingStreamService;
+        this.trainingSessionMapper = trainingSessionMapper;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -49,8 +60,7 @@ public class TrainingServiceImpl implements TrainingService {
         Map<String, Object> payload = pythonTrainingClient.initTraining(request);
         session.setSessionId(readString(payload, "sessionId", "train_" + UUID.randomUUID().toString().replace("-", "")));
         applyPythonPayload(session, payload);
-
-        sessions.put(session.getSessionId(), session);
+        saveSession(session);
         publishSession(session);
         return toSessionResponse(session);
     }
@@ -62,6 +72,7 @@ public class TrainingServiceImpl implements TrainingService {
             validateTrainable(session);
             Map<String, Object> payload = pythonTrainingClient.stepTraining(sessionId, request);
             applyPythonPayload(session, payload);
+            saveSession(session);
             publishSession(session);
             return toStatusResponse(session);
         }
@@ -75,6 +86,7 @@ public class TrainingServiceImpl implements TrainingService {
         synchronized (session) {
             Map<String, Object> payload = pythonTrainingClient.runTraining(sessionId, request);
             applyPythonPayload(session, payload);
+            saveSession(session);
             publishSession(session);
         }
         if (request.isAsync()) {
@@ -88,6 +100,7 @@ public class TrainingServiceImpl implements TrainingService {
         TrainingSession session = getSessionOrThrow(sessionId);
         synchronized (session) {
             applyPythonPayload(session, pythonTrainingClient.pauseTraining(sessionId));
+            saveSession(session);
             publishSession(session);
             return toSessionResponse(session);
         }
@@ -98,6 +111,7 @@ public class TrainingServiceImpl implements TrainingService {
         TrainingSession session = getSessionOrThrow(sessionId);
         synchronized (session) {
             applyPythonPayload(session, pythonTrainingClient.stopTraining(sessionId));
+            saveSession(session);
             publishSession(session);
             return toSessionResponse(session);
         }
@@ -108,6 +122,7 @@ public class TrainingServiceImpl implements TrainingService {
         TrainingSession session = getSessionOrThrow(sessionId);
         synchronized (session) {
             applyPythonPayload(session, pythonTrainingClient.getStatus(sessionId));
+            saveSession(session);
         }
         return toStatusResponse(session);
     }
@@ -122,6 +137,7 @@ public class TrainingServiceImpl implements TrainingService {
             TrainingSession session = getSessionOrThrow(sessionId);
             synchronized (session) {
                 applyPythonPayload(session, pythonTrainingClient.getStatus(sessionId));
+                saveSession(session);
                 publishSession(session);
                 if (session.getStatus() != TrainingStatus.RUNNING) {
                     return;
@@ -150,11 +166,30 @@ public class TrainingServiceImpl implements TrainingService {
     }
 
     private TrainingSession getSessionOrThrow(String sessionId) {
-        TrainingSession session = sessions.get(sessionId);
-        if (session == null) {
+        TrainingSession cached = sessionCache.get(sessionId);
+        if (cached != null) {
+            return cached;
+        }
+
+        TrainingSessionEntity entity = trainingSessionMapper.findBySessionId(sessionId);
+        if (entity == null) {
             throw new IllegalArgumentException("未找到训练会话: " + sessionId);
         }
+
+        TrainingSession session = fromEntity(entity);
+        sessionCache.put(sessionId, session);
         return session;
+    }
+
+    private void saveSession(TrainingSession session) {
+        sessionCache.put(session.getSessionId(), session);
+        TrainingSessionEntity existing = trainingSessionMapper.findBySessionId(session.getSessionId());
+        TrainingSessionEntity entity = toEntity(session);
+        if (existing == null) {
+            trainingSessionMapper.insert(entity);
+        } else {
+            trainingSessionMapper.update(entity);
+        }
     }
 
     private int readInt(Map<String, Object> source, String key, int defaultValue) {
@@ -325,5 +360,72 @@ public class TrainingServiceImpl implements TrainingService {
 
     private void publishSession(TrainingSession session) {
         trainingStreamService.publish(session.getSessionId(), toStatusResponse(session));
+    }
+
+    private TrainingSessionEntity toEntity(TrainingSession session) {
+        TrainingSessionEntity entity = new TrainingSessionEntity();
+        entity.setSessionId(session.getSessionId());
+        entity.setAlgorithmCode(session.getAlgorithmType().toCode());
+        entity.setDatasetId(session.getDatasetId());
+        entity.setFeatureColumnsJson(writeJson(session.getFeatureColumns()));
+        entity.setLabelColumn(session.getLabelColumn());
+        entity.setHyperParamsJson(writeJson(session.getHyperParams()));
+        entity.setTrainConfigJson(writeJson(session.getTrainConfig()));
+        entity.setStatus(session.getStatus().name());
+        entity.setCurrentStep(session.getCurrentStep());
+        entity.setMaxSteps(session.getMaxSteps());
+        entity.setLoss(session.getModelState().getLoss());
+        entity.setMetricsJson(writeJson(session.getModelState().getMetrics()));
+        entity.setParametersJson(writeJson(session.getModelState().getParameters()));
+        entity.setPredictionsJson(writeJson(session.getModelState().getPredictions()));
+        entity.setVisualizationJson(writeJson(session.getModelState().getVisualization()));
+        entity.setCreatedAt(session.getCreatedAt());
+        entity.setUpdatedAt(session.getUpdatedAt());
+        return entity;
+    }
+
+    private TrainingSession fromEntity(TrainingSessionEntity entity) {
+        TrainingSession session = new TrainingSession();
+        session.setSessionId(entity.getSessionId());
+        session.setAlgorithmType(AlgorithmType.fromCode(entity.getAlgorithmCode()));
+        session.setDatasetId(entity.getDatasetId());
+        session.setFeatureColumns(readJson(entity.getFeatureColumnsJson(), new TypeReference<List<String>>() {}, List.of()));
+        session.setLabelColumn(entity.getLabelColumn());
+        session.setHyperParams(readJson(entity.getHyperParamsJson(), new TypeReference<Map<String, Object>>() {}, new HashMap<>()));
+        session.setTrainConfig(readJson(entity.getTrainConfigJson(), new TypeReference<Map<String, Object>>() {}, new HashMap<>()));
+        session.setStatus(TrainingStatus.valueOf(entity.getStatus()));
+        session.setCurrentStep(entity.getCurrentStep());
+        session.setMaxSteps(entity.getMaxSteps());
+        session.setCreatedAt(entity.getCreatedAt());
+        session.setUpdatedAt(entity.getUpdatedAt());
+
+        ModelState modelState = new ModelState();
+        modelState.setLoss(entity.getLoss());
+        modelState.setMetrics(readJson(entity.getMetricsJson(), new TypeReference<Map<String, Object>>() {}, new HashMap<>()));
+        modelState.setParameters(readJson(entity.getParametersJson(), new TypeReference<Map<String, Object>>() {}, new HashMap<>()));
+        modelState.setPredictions(readJson(entity.getPredictionsJson(), new TypeReference<List<PredictionResult>>() {}, List.of()));
+        modelState.setVisualization(readJson(entity.getVisualizationJson(), new TypeReference<VisualizationData>() {}, new VisualizationData()));
+        session.setModelState(modelState);
+        return session;
+    }
+
+    private String writeJson(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("序列化训练会话失败", exception);
+        }
+    }
+
+    private <T> T readJson(String value, TypeReference<T> typeReference, T defaultValue) {
+        if (value == null || value.isBlank()) {
+            return defaultValue;
+        }
+
+        try {
+            return objectMapper.readValue(value, typeReference);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("反序列化训练会话失败", exception);
+        }
     }
 }

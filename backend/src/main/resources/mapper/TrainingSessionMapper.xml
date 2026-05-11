@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.mlplatform.persistence.mapper.TrainingSessionMapper">
+
+    <resultMap id="TrainingSessionEntityMap" type="com.example.mlplatform.persistence.entity.TrainingSessionEntity">
+        <id property="sessionId" column="session_id"/>
+        <result property="algorithmCode" column="algorithm_code"/>
+        <result property="datasetId" column="dataset_id"/>
+        <result property="featureColumnsJson" column="feature_columns_json"/>
+        <result property="labelColumn" column="label_column"/>
+        <result property="hyperParamsJson" column="hyper_params_json"/>
+        <result property="trainConfigJson" column="train_config_json"/>
+        <result property="status" column="status"/>
+        <result property="currentStep" column="current_step"/>
+        <result property="maxSteps" column="max_steps"/>
+        <result property="loss" column="loss"/>
+        <result property="metricsJson" column="metrics_json"/>
+        <result property="parametersJson" column="parameters_json"/>
+        <result property="predictionsJson" column="predictions_json"/>
+        <result property="visualizationJson" column="visualization_json"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.example.mlplatform.persistence.entity.TrainingSessionEntity">
+        INSERT INTO training_session (
+            session_id,
+            algorithm_code,
+            dataset_id,
+            feature_columns_json,
+            label_column,
+            hyper_params_json,
+            train_config_json,
+            status,
+            current_step,
+            max_steps,
+            loss,
+            metrics_json,
+            parameters_json,
+            predictions_json,
+            visualization_json,
+            created_at,
+            updated_at
+        ) VALUES (
+            #{sessionId},
+            #{algorithmCode},
+            #{datasetId},
+            #{featureColumnsJson},
+            #{labelColumn},
+            #{hyperParamsJson},
+            #{trainConfigJson},
+            #{status},
+            #{currentStep},
+            #{maxSteps},
+            #{loss},
+            #{metricsJson},
+            #{parametersJson},
+            #{predictionsJson},
+            #{visualizationJson},
+            #{createdAt},
+            #{updatedAt}
+        )
+    </insert>
+
+    <update id="update" parameterType="com.example.mlplatform.persistence.entity.TrainingSessionEntity">
+        UPDATE training_session
+        SET algorithm_code = #{algorithmCode},
+            dataset_id = #{datasetId},
+            feature_columns_json = #{featureColumnsJson},
+            label_column = #{labelColumn},
+            hyper_params_json = #{hyperParamsJson},
+            train_config_json = #{trainConfigJson},
+            status = #{status},
+            current_step = #{currentStep},
+            max_steps = #{maxSteps},
+            loss = #{loss},
+            metrics_json = #{metricsJson},
+            parameters_json = #{parametersJson},
+            predictions_json = #{predictionsJson},
+            visualization_json = #{visualizationJson},
+            created_at = #{createdAt},
+            updated_at = #{updatedAt}
+        WHERE session_id = #{sessionId}
+    </update>
+
+    <select id="findBySessionId" resultMap="TrainingSessionEntityMap">
+        SELECT
+            session_id,
+            algorithm_code,
+            dataset_id,
+            feature_columns_json,
+            label_column,
+            hyper_params_json,
+            train_config_json,
+            status,
+            current_step,
+            max_steps,
+            loss,
+            metrics_json,
+            parameters_json,
+            predictions_json,
+            visualization_json,
+            created_at,
+            updated_at
+        FROM training_session
+        WHERE session_id = #{sessionId}
+    </select>
+
+</mapper>
