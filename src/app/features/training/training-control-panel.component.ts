@@ -60,6 +60,13 @@ import { TwoDimensionalVisualizerComponent } from '../../shared/components/two-d
           <span>{{ formatMetric(safeAccuracy) }}</span>
         </div>
       </div>
+
+      <div class="status-ribbon">
+        <span class="ribbon-item">算法：{{ config?.algorithm || '未选择' }}</span>
+        <span class="ribbon-item">数据集：{{ config?.dataset || '未选择' }}</span>
+        <span class="ribbon-item">状态：{{ trainingState.status }}</span>
+        <span class="ribbon-item">进度：{{ trainingState.currentStep }}/{{ trainingState.maxSteps || maxSteps }}</span>
+      </div>
     </section>
 
     <app-two-dimensional-visualizer
@@ -92,27 +99,44 @@ import { TwoDimensionalVisualizerComponent } from '../../shared/components/two-d
     </section>
   `,
   styles: [`
-    .card { background: #fff; border-radius: 18px; padding: 24px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08); margin-bottom: 20px; }
+    .card { background: rgba(255,255,255,0.94); border-radius: 24px; padding: 24px; box-shadow: 0 24px 48px rgba(15, 23, 42, 0.08); margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.8); }
     .card-header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
-    h2 { margin: 0 0 8px; font-size: 24px; }
+    h2 { margin: 0 0 8px; font-size: 26px; }
     h3 { margin: 0; }
-    p { margin: 0; color: #64748b; }
-    .badge { padding: 6px 12px; border-radius: 999px; background: #f1f5f9; color: #475569; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+    p { margin: 0; color: #64748b; line-height: 1.7; }
+    .badge { padding: 8px 14px; border-radius: 999px; background: #f1f5f9; color: #475569; font-size: 12px; font-weight: 800; text-transform: uppercase; }
     .badge.running { background: #dcfce7; color: #15803d; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 16px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 16px; }
     .field { display: flex; flex-direction: column; gap: 8px; font-weight: 600; color: #334155; }
-    .field input { border: 1px solid #dbe2ea; border-radius: 12px; padding: 10px 12px; }
-    .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
-    button { border: 1px solid #cbd5f5; background: #fff; color: #1f2937; padding: 10px 16px; border-radius: 12px; cursor: pointer; font-weight: 600; }
-    button.primary { background: #2563eb; color: #fff; border-color: #2563eb; }
-    button.success { background: #10b981; color: #fff; border-color: #10b981; }
-    button.warning { background: #f59e0b; color: #fff; border-color: #f59e0b; }
+    .field input { border: 1px solid #dbe2ea; border-radius: 14px; padding: 12px 14px; background: rgba(255,255,255,0.98); }
+    .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
+    button { border: 1px solid #cbd5f5; background: #fff; color: #1f2937; padding: 11px 16px; border-radius: 14px; cursor: pointer; font-weight: 700; }
+    button.primary { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; border-color: #2563eb; }
+    button.success { background: linear-gradient(135deg, #10b981, #059669); color: #fff; border-color: #10b981; }
+    button.warning { background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; border-color: #f59e0b; }
     button:disabled { opacity: 0.6; cursor: not-allowed; }
-    .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-top: 16px; padding: 12px; border-radius: 14px; background: #f8fafc; }
+    .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-top: 16px; padding: 14px; border-radius: 16px; background: linear-gradient(180deg, #f8fbff, #f8fafc); border: 1px solid #e2e8f0; }
     .summary strong { display: block; font-size: 12px; color: #64748b; }
     .summary span { font-size: 15px; font-weight: 600; }
+    .status-ribbon {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+    .ribbon-item {
+      display: inline-flex;
+      align-items: center;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, #eff6ff, #f8fafc);
+      color: #334155;
+      border: 1px solid #dbeafe;
+      font-size: 13px;
+      font-weight: 700;
+    }
     .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
-    .json-card pre { margin: 0; background: #111827; color: #e2e8f0; padding: 16px; border-radius: 12px; overflow: auto; font-size: 12px; }
+    .json-card pre { margin: 0; background: linear-gradient(180deg, #0f172a, #111827); color: #e2e8f0; padding: 18px; border-radius: 16px; overflow: auto; font-size: 12px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); }
   `]
 })
 export class TrainingControlPanelComponent implements OnDestroy {

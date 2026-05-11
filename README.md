@@ -263,7 +263,7 @@ cd backend
 mvn spring-boot:run
 ```
 
-或先打包后运行：
+若上面的后端启动无法正常运行，可以尝试先打包后运行：
 
 ```bash
 mvn -q -DskipTests package
@@ -415,3 +415,4 @@ git status
 - 项目演示截图
 - 功能完成度说明
 - 答辩演示流程
+

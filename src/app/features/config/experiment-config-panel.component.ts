@@ -91,21 +91,85 @@ const learningTypeLabels: Record<string, string> = {
     </section>
   `,
   styles: [`
-    .card { background: #fff; border-radius: 18px; padding: 24px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08); }
-    .card-header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 20px; }
-    h2 { margin: 0 0 8px; font-size: 24px; }
-    p { margin: 0; color: #64748b; }
-    .badge { padding: 6px 12px; border-radius: 999px; background: #ecfeff; color: #0f766e; font-size: 12px; font-weight: 700; }
-    .placeholder { color: #64748b; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
-    .field, .param-card label { display: flex; flex-direction: column; gap: 8px; font-weight: 600; color: #334155; }
-    .field small { font-weight: 400; color: #64748b; }
-    select, input[type='number'] { width: 100%; border: 1px solid #dbe2ea; border-radius: 12px; padding: 10px 12px; background: #fff; }
-    .param-grid { margin-top: 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
-    .param-card { padding: 16px; border-radius: 14px; background: #f8fafc; }
-    .switch-field { display: flex; gap: 10px; align-items: center; font-weight: 500; }
-    .footer { margin-top: 20px; display: flex; justify-content: flex-end; }
-    button.primary { border: 0; border-radius: 12px; padding: 12px 18px; background: #2563eb; color: #fff; font-weight: 600; cursor: pointer; }
+    .card {
+      background: rgba(255,255,255,0.95);
+      border-radius: 28px;
+      padding: 32px 36px;
+      box-shadow: 0 28px 60px rgba(15, 23, 42, 0.08);
+      border: 1px solid rgba(255,255,255,0.8);
+      backdrop-filter: blur(10px);
+    }
+    .card-header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 26px; }
+    h2 { margin: 0 0 10px; font-size: 32px; color: #0f172a; }
+    p { margin: 0; color: #64748b; line-height: 1.8; font-size: 15px; }
+    .badge {
+      padding: 10px 16px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #ecfeff, #dcfce7);
+      color: #0f766e;
+      font-size: 13px;
+      font-weight: 800;
+      box-shadow: inset 0 0 0 1px rgba(15, 118, 110, 0.08);
+    }
+    .placeholder { color: #64748b; font-size: 15px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
+    .field, .param-card label { display: flex; flex-direction: column; gap: 10px; font-weight: 700; color: #1e293b; }
+    .field > span:first-child,
+    .param-card label > span:first-child { font-size: 17px; }
+    .field small { min-height: 48px; font-weight: 500; color: #64748b; line-height: 1.7; }
+    select, input[type='number'] {
+      width: 100%;
+      min-height: 66px;
+      border: 1px solid #d7e1f0;
+      border-radius: 18px;
+      padding: 14px 18px;
+      background: rgba(255,255,255,0.98);
+      font-size: 18px;
+      font-weight: 700;
+      color: #0f172a;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.9);
+    }
+    .param-grid { margin-top: 28px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
+    .param-card {
+      padding: 22px 24px;
+      border-radius: 22px;
+      background: linear-gradient(180deg, #f8fbff, #f8fafc);
+      border: 1px solid #e5edf7;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+    }
+    .switch-field {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      font-weight: 700;
+      color: #1e293b;
+      min-height: 66px;
+      justify-content: center;
+      border: 1px solid #d7e1f0;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.98);
+    }
+    .footer { margin-top: 26px; display: flex; justify-content: flex-end; }
+    button.primary {
+      border: 0;
+      border-radius: 18px;
+      padding: 16px 28px;
+      min-width: 150px;
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      color: #fff;
+      font-size: 16px;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 20px 34px rgba(37, 99, 235, 0.24);
+    }
+    @media (max-width: 980px) {
+      .card { padding: 24px 20px; border-radius: 22px; }
+      h2 { font-size: 28px; }
+      .field small { min-height: auto; }
+      select, input[type='number'] { min-height: 58px; font-size: 16px; }
+      .footer { justify-content: stretch; }
+      button.primary { width: 100%; }
+    }
   `]
 })
 export class ExperimentConfigPanelComponent implements OnChanges {

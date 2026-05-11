@@ -17,15 +17,23 @@ import { TrainingViewMode, VisualizationData } from '../../core/models/platform.
         </div>
         <span class="badge">{{ modeLabel }}</span>
       </div>
-      <div #chartContainer class="chart-container"></div>
+      <div class="chart-shell">
+        <div #chartContainer class="chart-container"></div>
+      </div>
     </section>
   `,
   styles: [`
-    .card { background: #fff; border-radius: 18px; padding: 20px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08); }
+    .card { background: rgba(255,255,255,0.94); border-radius: 24px; padding: 24px; box-shadow: 0 24px 48px rgba(15, 23, 42, 0.08); border: 1px solid rgba(255,255,255,0.8); }
     .card-header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 16px; }
-    h3 { margin: 0 0 8px; font-size: 20px; }
-    p { margin: 0; color: #64748b; }
-    .badge { padding: 6px 12px; border-radius: 999px; background: #eff6ff; color: #2563eb; font-size: 12px; font-weight: 600; }
+    h3 { margin: 0 0 8px; font-size: 22px; }
+    p { margin: 0; color: #64748b; line-height: 1.7; }
+    .badge { padding: 8px 14px; border-radius: 999px; background: linear-gradient(135deg, #eff6ff, #dbeafe); color: #2563eb; font-size: 12px; font-weight: 800; }
+    .chart-shell {
+      border-radius: 20px;
+      padding: 14px;
+      background: linear-gradient(180deg, #f8fbff, #ffffff);
+      border: 1px solid #e2e8f0;
+    }
     .chart-container { width: 100%; height: 380px; }
   `]
 })

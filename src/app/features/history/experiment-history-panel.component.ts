@@ -33,14 +33,14 @@ import { ExperimentRecord } from '../../core/models/platform.models';
     </section>
   `,
   styles: [`
-    .card { background: #fff; border-radius: 18px; padding: 24px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08); }
+    .card { background: rgba(255,255,255,0.94); border-radius: 24px; padding: 24px; box-shadow: 0 24px 48px rgba(15, 23, 42, 0.08); border: 1px solid rgba(255,255,255,0.8); }
     .card-header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 16px; }
     h2, h3 { margin: 0; }
     .card-header p, .history-item p, .history-item small, .empty { color: #64748b; }
     .history-list { display: grid; gap: 12px; }
-    .history-item { display: flex; justify-content: space-between; gap: 16px; align-items: center; padding: 14px 16px; border-radius: 14px; background: #f8fafc; }
-    button { border: 0; border-radius: 12px; padding: 10px 14px; background: #e2e8f0; color: #0f172a; font-weight: 600; cursor: pointer; }
-    button.primary { background: #2563eb; color: #fff; }
+    .history-item { display: flex; justify-content: space-between; gap: 16px; align-items: center; padding: 16px 18px; border-radius: 18px; background: linear-gradient(180deg, #f8fbff, #f8fafc); border: 1px solid #e2e8f0; }
+    button { border: 0; border-radius: 14px; padding: 12px 16px; background: #e2e8f0; color: #0f172a; font-weight: 700; cursor: pointer; }
+    button.primary { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; box-shadow: 0 16px 26px rgba(37, 99, 235, 0.16); }
   `]
 })
 export class ExperimentHistoryPanelComponent {

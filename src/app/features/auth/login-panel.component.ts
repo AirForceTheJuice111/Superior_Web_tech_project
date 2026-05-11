@@ -56,21 +56,27 @@ import { AuthApiService } from '../../core/services/auth-api.service';
     </section>
   `,
   styles: [`
-    .card { background: #fff; border-radius: 18px; padding: 24px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08); }
-    .card-header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 16px; }
+    .card {
+      background: rgba(255,255,255,0.94);
+      border-radius: 24px;
+      padding: 24px;
+      box-shadow: 0 24px 48px rgba(15, 23, 42, 0.08);
+      border: 1px solid rgba(255,255,255,0.8);
+    }
+    .card-header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 18px; }
     h2 { margin: 0 0 8px; font-size: 22px; }
-    p { margin: 0; color: #64748b; }
+    p { margin: 0; color: #64748b; line-height: 1.7; }
     code { padding: 2px 6px; border-radius: 8px; background: #eff6ff; color: #1d4ed8; }
     .badge { padding: 6px 12px; border-radius: 999px; background: #eff6ff; color: #1d4ed8; font-size: 12px; font-weight: 700; text-transform: uppercase; }
     .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; align-items: end; }
     .field { display: flex; flex-direction: column; gap: 8px; font-weight: 600; color: #334155; }
-    input { border: 1px solid #dbe2ea; border-radius: 12px; padding: 10px 12px; }
-    .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; padding: 12px; border-radius: 14px; background: #f8fafc; }
+    input { border: 1px solid #dbe2ea; border-radius: 14px; padding: 12px 14px; background: rgba(255,255,255,0.98); }
+    .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; padding: 14px; border-radius: 16px; background: linear-gradient(180deg, #f8fbff, #f8fafc); border: 1px solid #e2e8f0; }
     .summary strong { display: block; font-size: 12px; color: #64748b; }
     .summary span { display: block; margin-top: 4px; font-weight: 600; word-break: break-all; }
     .actions { margin-top: 12px; }
-    button { border: 0; border-radius: 12px; padding: 10px 16px; background: #e2e8f0; color: #0f172a; font-weight: 600; cursor: pointer; }
-    button.primary { background: #2563eb; color: #fff; }
+    button { border: 0; border-radius: 14px; padding: 12px 18px; background: #e2e8f0; color: #0f172a; font-weight: 700; cursor: pointer; }
+    button.primary { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; box-shadow: 0 18px 30px rgba(37, 99, 235, 0.18); }
     .error { margin-top: 12px; color: #dc2626; }
   `]
 })
