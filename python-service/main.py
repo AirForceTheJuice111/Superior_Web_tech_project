@@ -496,7 +496,7 @@ def current_step(session: TrainingSession) -> int:
     return int(session.model.get_state()["step"])
 
 
-def validate_trainable(session: LinearRegressionSession) -> None:
+def validate_trainable(session: TrainingSession) -> None:
     if session.status == "stopped":
         raise HTTPException(status_code=400, detail="训练已停止，不能继续执行")
     if session.status == "completed":
