@@ -116,15 +116,16 @@ def run_training(session_id: str, request: RunTrainingRequest) -> dict[str, Any]
         session.stop_requested = False
 
     if request.async_mode:
-        thread = threading.Thread(
-            target=run_loop,
-            args=(session, request.targetSteps, request.pushInterval),
-            daemon=True,
-            name=f"py-run-{session_id}",
-        )
-        session.run_thread = thread
-        thread.start()
-        return build_status_response(session)
+        with session.lock:
+            thread = threading.Thread(
+                target=run_loop,
+                args=(session, request.targetSteps, request.pushInterval),
+                daemon=True,
+                name=f"py-run-{session_id}",
+            )
+            session.run_thread = thread
+            thread.start()
+            return build_status_response(session)
 
     run_loop(session, request.targetSteps, request.pushInterval)
     return build_status_response(session)
