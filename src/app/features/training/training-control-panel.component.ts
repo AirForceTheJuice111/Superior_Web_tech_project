@@ -310,10 +310,10 @@ export class TrainingControlPanelComponent implements OnDestroy {
       visualization: payload.visualization || { points: [], boundary: [], centers: [] }
     };
 
-    this.appendMetric(this.lossHistory, payload.currentStep, payload.loss ?? 0);
+    this.lossHistory = this.appendMetric(this.lossHistory, payload.currentStep, payload.loss ?? 0);
     const accuracyValue = payload.metrics['accuracy'];
     if (typeof accuracyValue === 'number') {
-      this.appendMetric(this.accuracyHistory, payload.currentStep, accuracyValue);
+      this.accuracyHistory = this.appendMetric(this.accuracyHistory, payload.currentStep, accuracyValue);
     }
 
     this.emitSessionChange();
@@ -334,13 +334,12 @@ export class TrainingControlPanelComponent implements OnDestroy {
     });
   }
 
-  private appendMetric(history: Array<{ step: number; value: number }>, step: number, value: number): void {
+  private appendMetric(history: Array<{ step: number; value: number }>, step: number, value: number): Array<{ step: number; value: number }> {
     const existingIndex = history.findIndex((item) => item.step === step);
     if (existingIndex >= 0) {
-      history.splice(existingIndex, 1, { step, value });
-    } else {
-      history.push({ step, value });
+      return [...history.slice(0, existingIndex), { step, value }, ...history.slice(existingIndex + 1)];
     }
+    return [...history, { step, value }];
   }
 
   private buildInitPayload(): Record<string, unknown> {
