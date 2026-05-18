@@ -116,15 +116,16 @@ def run_training(session_id: str, request: RunTrainingRequest) -> dict[str, Any]
         session.stop_requested = False
 
     if request.async_mode:
-        thread = threading.Thread(
-            target=run_loop,
-            args=(session, request.targetSteps, request.pushInterval),
-            daemon=True,
-            name=f"py-run-{session_id}",
-        )
-        session.run_thread = thread
-        thread.start()
-        return build_status_response(session)
+        with session.lock:
+            thread = threading.Thread(
+                target=run_loop,
+                args=(session, request.targetSteps, request.pushInterval),
+                daemon=True,
+                name=f"py-run-{session_id}",
+            )
+            session.run_thread = thread
+            thread.start()
+            return build_status_response(session)
 
     run_loop(session, request.targetSteps, request.pushInterval)
     return build_status_response(session)
@@ -496,7 +497,7 @@ def current_step(session: TrainingSession) -> int:
     return int(session.model.get_state()["step"])
 
 
-def validate_trainable(session: LinearRegressionSession) -> None:
+def validate_trainable(session: TrainingSession) -> None:
     if session.status == "stopped":
         raise HTTPException(status_code=400, detail="训练已停止，不能继续执行")
     if session.status == "completed":
