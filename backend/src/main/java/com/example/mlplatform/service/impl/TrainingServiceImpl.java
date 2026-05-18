@@ -20,6 +20,8 @@ import com.example.mlplatform.service.TrainingStreamService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Service;
 
@@ -33,6 +35,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class TrainingServiceImpl implements TrainingService {
+
+    private static final Logger log = LoggerFactory.getLogger(TrainingServiceImpl.class);
 
     private final Map<String, TrainingSession> sessionCache = new ConcurrentHashMap<>();
     private final PythonTrainingClient pythonTrainingClient;
@@ -134,14 +138,30 @@ public class TrainingServiceImpl implements TrainingService {
 
     private void monitorPythonSession(String sessionId) {
         while (true) {
-            TrainingSession session = getSessionOrThrow(sessionId);
-            synchronized (session) {
-                applyPythonPayload(session, pythonTrainingClient.getStatus(sessionId));
-                saveSession(session);
-                publishSession(session);
-                if (session.getStatus() != TrainingStatus.RUNNING) {
-                    return;
+            try {
+                TrainingSession session = getSessionOrThrow(sessionId);
+                synchronized (session) {
+                    applyPythonPayload(session, pythonTrainingClient.getStatus(sessionId));
+                    saveSession(session);
+                    publishSession(session);
+                    if (session.getStatus() != TrainingStatus.RUNNING) {
+                        return;
+                    }
                 }
+            } catch (Exception e) {
+                log.error("监控训练会话失败 [sessionId={}]", sessionId, e);
+                try {
+                    TrainingSession session = getSessionOrThrow(sessionId);
+                    synchronized (session) {
+                        session.setStatus(TrainingStatus.FAILED);
+                        session.setUpdatedAt(LocalDateTime.now());
+                        saveSession(session);
+                        publishSession(session);
+                    }
+                } catch (Exception inner) {
+                    log.error("标记训练会话为FAILED时出错 [sessionId={}]", sessionId, inner);
+                }
+                return;
             }
 
             try {
