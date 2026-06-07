@@ -64,3 +64,18 @@ CREATE TABLE IF NOT EXISTS experiment (
     updated_at TIMESTAMP NOT NULL,
     CONSTRAINT fk_experiment_user FOREIGN KEY (user_id) REFERENCES app_user(id)
 );
+
+CREATE TABLE IF NOT EXISTS experiment_case (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(64) NOT NULL UNIQUE,
+    title VARCHAR(128) NOT NULL,
+    description VARCHAR(255),
+    learning_type VARCHAR(64) NOT NULL,
+    algorithm_code VARCHAR(64) NOT NULL,
+    dataset_code VARCHAR(64) NOT NULL,
+    config_json CLOB NOT NULL,
+    guide_text CLOB,
+    expected_result CLOB,
+    display_order INT NOT NULL,
+    created_at TIMESTAMP NOT NULL
+);

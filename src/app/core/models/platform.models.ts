@@ -1,5 +1,5 @@
 ﻿export type LearningType = 'supervised' | 'unsupervised' | 'reinforcement';
-export type TrainingViewMode = 'classification' | 'regression' | 'clustering';
+export type TrainingViewMode = 'classification' | 'regression' | 'clustering' | 'projection';
 export type ParamValue = string | number | boolean;
 export type ParamInputType = 'number' | 'select' | 'boolean' | 'switch';
 
@@ -46,11 +46,24 @@ export interface DatasetMeta {
   labelColumn: string | null;
 }
 
+export type CustomDatasetCell = string | number | null;
+
+export interface CustomDatasetPayload {
+  name: string;
+  sourceType: 'csv';
+  columns: string[];
+  rows: Array<Record<string, CustomDatasetCell>>;
+  featureColumns: string[];
+  labelColumn: string | null;
+  sampleCount: number;
+}
+
 export interface ExperimentConfig {
   learningType: LearningType;
   algorithm: string;
   dataset: string;
   params: Record<string, ParamValue>;
+  customDataset?: CustomDatasetPayload | null;
 }
 
 export interface UserProfile {
@@ -87,6 +100,21 @@ export interface ExperimentRecord {
   config: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ExperimentCase {
+  id: number;
+  code: string;
+  title: string;
+  description: string;
+  learningType: string;
+  algorithmCode: string;
+  datasetCode: string;
+  config: Record<string, unknown>;
+  guideText: string;
+  expectedResult: string;
+  displayOrder: number;
+  createdAt: string;
 }
 
 export interface ChartPoint {

@@ -3,10 +3,13 @@ import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Subscription, forkJoin } from 'rxjs';
 
-import { AlgorithmMeta, ExperimentConfig, ExperimentRecord, LearningType, ParamValue, TrainingSessionSummary, UserProfile } from '../../core/models/platform.models';
+import { AlgorithmMeta, CustomDatasetPayload, DatasetMeta, ExperimentCase, ExperimentConfig, ExperimentRecord, LearningType, ParamValue, TrainingSessionSummary, UserProfile } from '../../core/models/platform.models';
 import { CatalogApiService } from '../../core/services/catalog-api.service';
+import { ExperimentCaseApiService } from '../../core/services/experiment-case-api.service';
 import { ExperimentApiService } from '../../core/services/experiment-api.service';
 import { LoginPanelComponent } from '../auth/login-panel.component';
+import { ExperimentCaseLibraryPanelComponent } from '../cases/experiment-case-library-panel.component';
+import { ModelComparisonPanelComponent } from '../comparison/model-comparison-panel.component';
 import { ExperimentConfigPanelComponent } from '../config/experiment-config-panel.component';
 import { ExperimentHistoryPanelComponent } from '../history/experiment-history-panel.component';
 import { TrainingControlPanelComponent } from '../training/training-control-panel.component';
@@ -18,6 +21,8 @@ import { TrainingControlPanelComponent } from '../training/training-control-pane
     CommonModule,
     FormsModule,
     LoginPanelComponent,
+    ExperimentCaseLibraryPanelComponent,
+    ModelComparisonPanelComponent,
     ExperimentConfigPanelComponent,
     ExperimentHistoryPanelComponent,
     TrainingControlPanelComponent
@@ -56,6 +61,10 @@ import { TrainingControlPanelComponent } from '../training/training-control-pane
           <span>实验记录</span>
         </article>
         <article class="overview-card">
+          <strong>{{ experimentCases.length || 0 }}</strong>
+          <span>预设案例</span>
+        </article>
+        <article class="overview-card">
           <strong>{{ latestSessionId ? '在线' : '待启动' }}</strong>
           <span>训练会话</span>
         </article>
@@ -66,6 +75,12 @@ import { TrainingControlPanelComponent } from '../training/training-control-pane
         (loginSuccess)="handleLogin($event)"
         (logout)="handleLogout()"
       ></app-login-panel>
+
+      <app-experiment-case-library-panel
+        [cases]="experimentCases"
+        [loading]="caseLoading"
+        (loadRequested)="applyCase($event)"
+      ></app-experiment-case-library-panel>
 
       <section class="workspace-grid">
         <app-experiment-config-panel
@@ -106,6 +121,11 @@ import { TrainingControlPanelComponent } from '../training/training-control-pane
           <p class="hint">{{ saveMessage }}</p>
         </section>
       </section>
+
+      <app-model-comparison-panel
+        [config]="activeConfig"
+        [algorithms]="algorithms"
+      ></app-model-comparison-panel>
 
       <app-experiment-history-panel
         [experiments]="experimentHistory"
@@ -172,7 +192,7 @@ import { TrainingControlPanelComponent } from '../training/training-control-pane
     }
     .overview-grid {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
       gap: 16px;
     }
     .overview-card {
@@ -261,7 +281,8 @@ import { TrainingControlPanelComponent } from '../training/training-control-pane
 })
 export class WorkbenchPageComponent implements OnInit, OnDestroy {
   algorithms: AlgorithmMeta[] = [];
-  datasets: Array<{ id: number; code: string; name: string; description: string; taskType: string; sourceType: string; featureCount: number; sampleCount: number; labelColumn: string | null; }> = [];
+  datasets: DatasetMeta[] = [];
+  experimentCases: ExperimentCase[] = [];
   activeConfig: ExperimentConfig | null = null;
   currentUser: UserProfile | null = null;
   experimentHistory: ExperimentRecord[] = [];
@@ -269,6 +290,7 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
   latestSessionId = '';
   saveMessage = '登录后可将当前配置保存到 experiment 表。';
   catalogLoading = true;
+  caseLoading = true;
   historyLoading = false;
   saveLoading = false;
 
@@ -276,6 +298,7 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
 
   constructor(
     private readonly catalogApi: CatalogApiService,
+    private readonly experimentCaseApi: ExperimentCaseApiService,
     private readonly experimentApi: ExperimentApiService
   ) {}
 
@@ -351,7 +374,8 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
         learningType: this.activeConfig.learningType,
         algorithm: this.activeConfig.algorithm,
         dataset: this.activeConfig.dataset,
-        params: this.activeConfig.params
+        params: this.activeConfig.params,
+        customDataset: this.activeConfig.customDataset ?? null
       }
     };
 
@@ -377,16 +401,37 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
     const learningType = (typeof config['learningType'] === 'string' ? config['learningType'] : record.learningType) as LearningType;
     const algorithm = typeof config['algorithm'] === 'string' ? config['algorithm'] : record.algorithmCode;
     const dataset = typeof config['dataset'] === 'string' ? config['dataset'] : record.datasetCode;
+    const customDataset = this.readCustomDataset(config['customDataset']);
 
     this.activeConfig = {
       learningType,
       algorithm,
       dataset,
-      params
+      params,
+      customDataset
     };
     this.experimentName = record.name;
     this.latestSessionId = record.latestSessionId ?? '';
     this.saveMessage = `已载入实验 ${record.name} 的配置。`;
+  }
+
+  applyCase(item: ExperimentCase): void {
+    const config = item.config;
+    const params = this.readParams(config['params']);
+    const learningType = (typeof config['learningType'] === 'string' ? config['learningType'] : item.learningType) as LearningType;
+    const algorithm = typeof config['algorithm'] === 'string' ? config['algorithm'] : item.algorithmCode;
+    const dataset = typeof config['dataset'] === 'string' ? config['dataset'] : item.datasetCode;
+
+    this.activeConfig = {
+      learningType,
+      algorithm,
+      dataset,
+      params,
+      customDataset: null
+    };
+    this.experimentName = item.title;
+    this.latestSessionId = '';
+    this.saveMessage = `已载入预设案例「${item.title}」，可初始化训练并观察结果。`;
   }
 
   ngOnDestroy(): void {
@@ -395,20 +440,25 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
 
   private loadCatalogs(): void {
     this.catalogLoading = true;
+    this.caseLoading = true;
     const sub = forkJoin({
       algorithms: this.catalogApi.listAlgorithms(),
-      datasets: this.catalogApi.listDatasets()
+      datasets: this.catalogApi.listDatasets(),
+      cases: this.experimentCaseApi.listCases()
     }).subscribe({
-      next: ({ algorithms, datasets }) => {
+      next: ({ algorithms, datasets, cases }) => {
         this.algorithms = algorithms;
         this.datasets = datasets;
+        this.experimentCases = cases;
       },
       error: (error: unknown) => {
         this.saveMessage = error instanceof Error ? error.message : '元数据加载失败';
         this.catalogLoading = false;
+        this.caseLoading = false;
       },
       complete: () => {
         this.catalogLoading = false;
+        this.caseLoading = false;
       }
     });
     this.subscriptions.add(sub);
@@ -430,5 +480,32 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
       }
     }
     return result;
+  }
+
+  private readCustomDataset(raw: unknown): CustomDatasetPayload | null {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      return null;
+    }
+
+    const value = raw as Partial<CustomDatasetPayload>;
+    if (
+      value.sourceType !== 'csv'
+      || typeof value.name !== 'string'
+      || !Array.isArray(value.columns)
+      || !Array.isArray(value.rows)
+      || !Array.isArray(value.featureColumns)
+    ) {
+      return null;
+    }
+
+    return {
+      name: value.name,
+      sourceType: 'csv',
+      columns: value.columns.filter((item): item is string => typeof item === 'string'),
+      rows: value.rows as CustomDatasetPayload['rows'],
+      featureColumns: value.featureColumns.filter((item): item is string => typeof item === 'string'),
+      labelColumn: typeof value.labelColumn === 'string' ? value.labelColumn : null,
+      sampleCount: typeof value.sampleCount === 'number' ? value.sampleCount : value.rows.length
+    };
   }
 }

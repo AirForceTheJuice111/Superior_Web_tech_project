@@ -20,6 +20,8 @@ import java.util.Map;
 @Service
 public class ExperimentServiceImpl implements ExperimentService {
 
+    private static final String UPLOADED_CSV_DATASET_CODE = "uploaded_csv";
+
     private final ExperimentMapper experimentMapper;
     private final UserMapper userMapper;
     private final DatasetMetaMapper datasetMetaMapper;
@@ -73,7 +75,8 @@ public class ExperimentServiceImpl implements ExperimentService {
         if (userMapper.findById(request.getUserId()) == null) {
             throw new IllegalArgumentException("用户不存在");
         }
-        if (datasetMetaMapper.findByCode(request.getDatasetCode()) == null) {
+        if (!UPLOADED_CSV_DATASET_CODE.equals(request.getDatasetCode())
+                && datasetMetaMapper.findByCode(request.getDatasetCode()) == null) {
             throw new IllegalArgumentException("数据集不存在");
         }
         if (algorithmMetaMapper.findByCode(request.getAlgorithmCode()) == null) {

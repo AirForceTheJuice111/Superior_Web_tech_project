@@ -50,7 +50,8 @@ export class TwoDimensionalVisualizerComponent implements AfterViewInit, OnChang
     return {
       classification: '分类',
       regression: '回归',
-      clustering: '聚类'
+      clustering: '聚类',
+      projection: '降维'
     }[this.mode];
   }
 
