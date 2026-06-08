@@ -26,6 +26,8 @@ public class InitTrainingRequest {
     @NotNull(message = "trainConfig 不能为空")
     private Map<String, Object> trainConfig;
 
+    private Map<String, Object> customDataset;
+
     public String getAlgorithm() {
         return algorithm;
     }
@@ -72,5 +74,13 @@ public class InitTrainingRequest {
 
     public void setTrainConfig(Map<String, Object> trainConfig) {
         this.trainConfig = trainConfig;
+    }
+
+    public Map<String, Object> getCustomDataset() {
+        return customDataset;
+    }
+
+    public void setCustomDataset(Map<String, Object> customDataset) {
+        this.customDataset = customDataset;
     }
 }

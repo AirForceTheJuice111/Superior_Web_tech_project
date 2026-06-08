@@ -7,11 +7,13 @@ import { ExperimentConfig, TrainingSessionSummary, TrainingStatusResponse, Train
 import { TrainingApiService } from '../../core/services/training-api.service';
 import { MetricTrendChartComponent } from '../../shared/components/metric-trend-chart.component';
 import { TwoDimensionalVisualizerComponent } from '../../shared/components/two-dimensional-visualizer.component';
+import { EvaluationMetricsPanelComponent } from './evaluation-metrics-panel.component';
+import { ModelExplanationPanelComponent } from './model-explanation-panel.component';
 
 @Component({
   selector: 'app-training-control-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule, TwoDimensionalVisualizerComponent, MetricTrendChartComponent],
+  imports: [CommonModule, FormsModule, TwoDimensionalVisualizerComponent, MetricTrendChartComponent, EvaluationMetricsPanelComponent, ModelExplanationPanelComponent],
   template: `
     <section class="card">
       <div class="card-header">
@@ -68,6 +70,21 @@ import { TwoDimensionalVisualizerComponent } from '../../shared/components/two-d
         <span class="ribbon-item">进度：{{ trainingState.currentStep }}/{{ trainingState.maxSteps || maxSteps }}</span>
       </div>
     </section>
+
+    <app-evaluation-metrics-panel
+      [algorithm]="trainingState.algorithm || config?.algorithm || ''"
+      [loss]="trainingState.loss"
+      [metrics]="trainingState.metrics"
+      [predictions]="trainingState.predictions"
+      [parameters]="trainingState.parameters"
+    ></app-evaluation-metrics-panel>
+
+    <app-model-explanation-panel
+      [algorithm]="trainingState.algorithm || config?.algorithm || ''"
+      [parameters]="trainingState.parameters"
+      [predictions]="trainingState.predictions"
+      [visualization]="trainingState.visualization"
+    ></app-model-explanation-panel>
 
     <app-two-dimensional-visualizer
       [mode]="viewMode"
@@ -177,10 +194,13 @@ export class TrainingControlPanelComponent implements OnDestroy {
   constructor(private readonly trainingApi: TrainingApiService) {}
 
   get viewMode(): TrainingViewMode {
+    if (this.config?.algorithm === 'pca') {
+      return 'projection';
+    }
     if (this.config?.algorithm === 'kmeans') {
       return 'clustering';
     }
-    if (this.config?.algorithm === 'svm') {
+    if (['svm', 'logistic_regression', 'decision_tree', 'random_forest'].includes(this.config?.algorithm ?? '')) {
       return 'classification';
     }
     return 'regression';
@@ -345,6 +365,9 @@ export class TrainingControlPanelComponent implements OnDestroy {
   private buildInitPayload(): Record<string, unknown> {
     const algorithm = this.config?.algorithm ?? 'linear_regression';
     const hyperParams = { ...(this.config?.params ?? {}) };
+    const customDataset = this.config?.customDataset ?? null;
+    const featureColumns = customDataset?.featureColumns?.length ? customDataset.featureColumns : ['x1', 'x2'];
+    const labelColumn = ['kmeans', 'pca'].includes(algorithm) ? null : customDataset?.labelColumn ?? 'label';
 
     if (algorithm === 'svm' && !('learningRate' in hyperParams)) {
       hyperParams['learningRate'] = 0.01;
@@ -355,15 +378,57 @@ export class TrainingControlPanelComponent implements OnDestroy {
     if (algorithm === 'kmeans' && !('kValue' in hyperParams)) {
       hyperParams['kValue'] = 3;
     }
+    if (algorithm === 'logistic_regression' && !('learningRate' in hyperParams)) {
+      hyperParams['learningRate'] = 0.05;
+    }
+    if (algorithm === 'decision_tree') {
+      if (!('maxDepth' in hyperParams)) {
+        hyperParams['maxDepth'] = 4;
+      }
+      if (!('criterion' in hyperParams)) {
+        hyperParams['criterion'] = 'gini';
+      }
+      if (!('minSamplesSplit' in hyperParams)) {
+        hyperParams['minSamplesSplit'] = 2;
+      }
+    }
+    if (algorithm === 'random_forest') {
+      if (!('nEstimators' in hyperParams)) {
+        hyperParams['nEstimators'] = 30;
+      }
+      if (!('treesPerStep' in hyperParams)) {
+        hyperParams['treesPerStep'] = 5;
+      }
+      if (!('maxDepth' in hyperParams)) {
+        hyperParams['maxDepth'] = 4;
+      }
+      if (!('minSamplesSplit' in hyperParams)) {
+        hyperParams['minSamplesSplit'] = 2;
+      }
+    }
+    if (algorithm === 'pca') {
+      if (!('nComponents' in hyperParams)) {
+        hyperParams['nComponents'] = 2;
+      }
+      if (!('standardize' in hyperParams)) {
+        hyperParams['standardize'] = true;
+      }
+    }
 
-    return {
+    const payload: Record<string, unknown> = {
       algorithm,
       datasetId: this.config?.dataset ?? 'frontend_dataset',
-      featureColumns: ['x1', 'x2'],
-      labelColumn: algorithm === 'kmeans' ? null : 'label',
+      featureColumns,
+      labelColumn,
       hyperParams,
       trainConfig: { maxSteps: this.maxSteps }
     };
+
+    if (customDataset) {
+      payload['customDataset'] = customDataset;
+    }
+
+    return payload;
   }
 
   private clearTimer(): void {
