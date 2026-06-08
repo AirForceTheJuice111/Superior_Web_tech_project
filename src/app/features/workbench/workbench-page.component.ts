@@ -1,5 +1,5 @@
 ﻿import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit, effect } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Subscription, forkJoin, of } from 'rxjs';
 
@@ -7,6 +7,7 @@ import { AlgorithmMeta, DatasetMeta, ExperimentConfig, ExperimentRecord, Learnin
 import { CatalogApiService } from '../../core/services/catalog-api.service';
 import { DatasetUploadApiService } from '../../core/services/dataset-upload-api.service';
 import { ExperimentApiService } from '../../core/services/experiment-api.service';
+import { AuthSessionService } from '../../core/services/auth-session.service';
 import { LoginPanelComponent } from '../auth/login-panel.component';
 import { ExperimentConfigPanelComponent } from '../config/experiment-config-panel.component';
 import { DatasetUploadPanelComponent } from '../datasets/dataset-upload-panel.component';
@@ -276,7 +277,7 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
   experimentName = '';
   latestSessionId = '';
   saveMessage = '登录后可将当前配置保存到 experiment 表。';
-  catalogLoading = true;
+  catalogLoading = false;
   historyLoading = false;
   saveLoading = false;
 
@@ -285,28 +286,53 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
   constructor(
     private readonly catalogApi: CatalogApiService,
     private readonly experimentApi: ExperimentApiService,
-    private readonly datasetUploadApi: DatasetUploadApiService
-  ) {}
+    private readonly datasetUploadApi: DatasetUploadApiService,
+    private readonly session: AuthSessionService
+  ) {
+    // 当令牌被拦截器因 401 清除时，同步把视图拉回未登录态。
+    effect(() => {
+      if (!this.session.isAuthenticated() && this.currentUser) {
+        this.currentUser = null;
+        this.algorithms = [];
+        this.datasets = [];
+        this.experimentHistory = [];
+        this.saveMessage = '登录已失效，请重新登录。';
+      }
+    });
+  }
 
   get canSaveExperiment(): boolean {
     return !!this.currentUser && !!this.activeConfig && this.experimentName.trim().length > 0;
   }
 
   ngOnInit(): void {
-    this.loadCatalogs();
+    // 受保护的目录/历史接口在登录后才拉取；刷新后若 localStorage 仍有会话则自动恢复。
+    const restored = this.session.profile();
+    if (restored) {
+      this.currentUser = restored;
+      this.loadAuthenticatedData();
+    }
   }
 
   handleLogin(user: UserProfile): void {
+    this.session.setSession(user);
     this.currentUser = user;
     this.saveMessage = `欢迎回来，${user.displayName}。`;
-    this.loadHistory();
-    this.loadCatalogs();
+    this.loadAuthenticatedData();
   }
 
   handleLogout(): void {
+    this.session.clear();
     this.currentUser = null;
+    this.algorithms = [];
+    this.datasets = [];
     this.experimentHistory = [];
     this.saveMessage = '已退出登录。';
+  }
+
+  private loadAuthenticatedData(): void {
+    this.loadCatalogs();
+    this.loadHistory();
   }
 
   handleConfigChange(config: ExperimentConfig): void {

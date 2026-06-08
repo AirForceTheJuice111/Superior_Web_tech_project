@@ -2,6 +2,7 @@ package com.example.mlplatform;
 
 import com.example.mlplatform.config.AppCorsProperties;
 import com.example.mlplatform.config.DatasetUploadProperties;
+import com.example.mlplatform.config.JwtProperties;
 import com.example.mlplatform.config.PythonServiceProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -12,7 +13,8 @@ import org.springframework.scheduling.annotation.EnableAsync;
 @EnableConfigurationProperties({
         AppCorsProperties.class,
         PythonServiceProperties.class,
-        DatasetUploadProperties.class
+        DatasetUploadProperties.class,
+        JwtProperties.class
 })
 @SpringBootApplication
 public class MlPlatformApplication {
