@@ -316,6 +316,9 @@ def _coerce_numeric_labels(raw_labels: list[Any], expected: int) -> np.ndarray:
     if len(values) != expected:
         raise HTTPException(status_code=400, detail="标签数量与样本数量不一致")
     return np.asarray(values, dtype=float)
+
+
+def build_linear_regression_dataset(request: InitTrainingRequest) -> tuple[np.ndarray, np.ndarray]:
     feature_count = max(1, len(request.featureColumns))
     samples = 20
     x_axis = np.linspace(1.0, 5.0, samples)

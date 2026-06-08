@@ -54,41 +54,58 @@ class GridWorld:
         self._agent: tuple[int, int] = self.start
 
     def _build_layout(self) -> tuple[set[tuple[int, int]], set[tuple[int, int]]]:
-        """确定性地放置障碍与陷阱，并避开起点/终点。"""
-        rng = np.random.default_rng(self.random_state)
+        """确定性地放置障碍与陷阱，并保证从起点到终点存在一条不穿障碍/陷阱的通路。
+
+        随机撒点后用 BFS 校验连通性，不连通则换种子重撒；多次失败则退回到
+        无障碍布局，确保环境永远可解（默认参数下也能训练出策略）。
+        """
         size = self.size
         forbidden = {self.start, self.goal}
-
         obstacle_count = max(1, (size * size) // 6)
         trap_count = max(1, (size * size) // 10)
 
-        candidates = [
-            (r, c)
-            for r in range(size)
-            for c in range(size)
-            if (r, c) not in forbidden
-        ]
-        rng.shuffle(candidates)
+        for attempt in range(50):
+            rng = np.random.default_rng(self.random_state + attempt)
+            candidates = [
+                (r, c)
+                for r in range(size)
+                for c in range(size)
+                if (r, c) not in forbidden
+            ]
+            rng.shuffle(candidates)
 
-        obstacles: set[tuple[int, int]] = set()
-        traps: set[tuple[int, int]] = set()
-        for cell in candidates:
-            if len(obstacles) < obstacle_count:
-                obstacles.add(cell)
-            elif len(traps) < trap_count:
-                traps.add(cell)
-            else:
-                break
+            obstacles: set[tuple[int, int]] = set()
+            traps: set[tuple[int, int]] = set()
+            for cell in candidates:
+                if len(obstacles) < obstacle_count:
+                    obstacles.add(cell)
+                elif len(traps) < trap_count:
+                    traps.add(cell)
+                else:
+                    break
 
-        # 保证起点周围至少有一条出路，避免环境一开局就无解。
-        sr, sc = self.start
-        for dr, dc in ACTION_DELTAS:
-            neighbor = (sr + dr, sc + dc)
-            if self._in_bounds(neighbor):
-                obstacles.discard(neighbor)
-                traps.discard(neighbor)
-                break
-        return obstacles, traps
+            if self._is_solvable(obstacles, traps):
+                return obstacles, traps
+
+        # 兜底：极端情况下退回无障碍布局，保证环境一定可解。
+        return set(), set()
+
+    def _is_solvable(self, obstacles: set[tuple[int, int]], traps: set[tuple[int, int]]) -> bool:
+        """BFS 校验：存在一条从起点到终点、不经过障碍与陷阱的路径。"""
+        blocked = obstacles | traps
+        queue = [self.start]
+        visited = {self.start}
+        while queue:
+            cell = queue.pop()
+            if cell == self.goal:
+                return True
+            r, c = cell
+            for dr, dc in ACTION_DELTAS:
+                nxt = (r + dr, c + dc)
+                if self._in_bounds(nxt) and nxt not in blocked and nxt not in visited:
+                    visited.add(nxt)
+                    queue.append(nxt)
+        return False
 
     def _in_bounds(self, cell: tuple[int, int]) -> bool:
         r, c = cell
