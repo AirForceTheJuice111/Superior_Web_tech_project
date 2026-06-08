@@ -1,0 +1,118 @@
+<section class="card">
+  <div class="card-header">
+    <div>
+      <h2>CSV 数据集上传</h2>
+      <p>前端解析 CSV（表头 / 数据行 / 数值列识别），落库为可复用数据集，可用于训练。</p>
+    </div>
+    <span class="badge">持久化</span>
+  </div>
+
+  <p class="placeholder" *ngIf="!user">登录后即可上传与管理数据集。</p>
+
+  <ng-container *ngIf="user">
+    <div class="upload-grid">
+      <label class="field file-field">
+        <span>选择 CSV 文件</span>
+        <input type="file" accept=".csv,text/csv" (change)="handleFileChange($event)" />
+        <small>{{ fileName || '未选择文件' }}</small>
+      </label>
+
+      <label class="field">
+        <span>数据集名称</span>
+        <input type="text" [(ngModel)]="datasetName" placeholder="例如：销售数据集" />
+      </label>
+
+      <label class="field">
+        <span>描述（可选）</span>
+        <input type="text" [(ngModel)]="description" placeholder="数据集用途说明" />
+      </label>
+
+      <label class="field" *ngIf="parsed">
+        <span>标签列（可选）</span>
+        <select [(ngModel)]="labelColumn">
+          <option [ngValue]="''">无标签（无监督）</option>
+          <option *ngFor="let header of previewHeaders" [ngValue]="header">{{ header }}</option>
+        </select>
+      </label>
+    </div>
+
+    <p class="error" *ngIf="parseError">{{ parseError }}</p>
+
+    <div class="preview" *ngIf="parsed">
+      <div class="preview-meta">
+        <span>{{ parsed.headers.length }} 列</span>
+        <span>{{ parsed.rows.length }} 行</span>
+        <span>数值列：{{ parsed.numericColumns.join(', ') || '无' }}</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th *ngFor="let header of previewHeaders" [class.label-col]="header === labelColumn">{{ header }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let row of previewRows">
+              <td *ngFor="let cell of row">{{ cell }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <small class="hint">仅预览前 8 行，完整数据将在上传时一并提交。</small>
+    </div>
+
+    <div class="actions">
+      <button class="primary" type="button" (click)="upload()" [disabled]="!canUpload">
+        {{ uploading ? '上传中...' : '上传并保存' }}
+      </button>
+      <button type="button" (click)="refreshList()" [disabled]="loadingList">刷新列表</button>
+    </div>
+
+    <p class="message">{{ message }}</p>
+
+    <div class="managed">
+      <h3>已上传数据集</h3>
+      <p class="placeholder" *ngIf="!loadingList && uploaded.length === 0">还没有上传过数据集。</p>
+      <p class="placeholder" *ngIf="loadingList">正在加载...</p>
+
+      <div class="dataset-list" *ngIf="uploaded.length > 0">
+        <article class="dataset-item" *ngFor="let item of uploaded">
+          <div class="dataset-info">
+            <strong>{{ item.name }}</strong>
+            <span class="code">{{ item.code }}</span>
+            <span class="tags">
+              <span class="tag">{{ item.taskType }}</span>
+              <span class="tag">{{ item.rowCount }} 行 / {{ item.columnCount }} 列</span>
+              <span class="tag" *ngIf="item.labelColumn">标签：{{ item.labelColumn }}</span>
+            </span>
+          </div>
+          <div class="dataset-actions">
+            <button type="button" (click)="viewDetail(item.code)">预览</button>
+            <button type="button" class="danger" (click)="remove(item)">删除</button>
+          </div>
+        </article>
+      </div>
+    </div>
+
+    <div class="detail" *ngIf="detail">
+      <div class="detail-header">
+        <h3>{{ detail.meta.name }} · 数据预览（前 {{ detail.previewLimit }} 行）</h3>
+        <button type="button" (click)="closeDetail()">关闭</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th *ngFor="let header of detail.headers">{{ header }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let row of detail.previewRows">
+              <td *ngFor="let cell of row">{{ cell }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </ng-container>
+</section>
