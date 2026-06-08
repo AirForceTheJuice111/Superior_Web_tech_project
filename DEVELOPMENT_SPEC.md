@@ -79,3 +79,20 @@ npm run build
 - 新增任何网络端点须说明鉴权情况，不静默暴露无鉴权接口
 - 处理上传文件（M3 CSV）须校验大小/行数/类型，防注入
 - 不在响应中回显密钥/密码
+- 归属判定一律以 JWT 认证主体（`@CurrentUser AuthPrincipal`）为准，禁止信任客户端自报的 userId
+
+## 八、运行前置（鉴权接入后必读）
+
+后端启动**必须**先设置 JWT 密钥环境变量，否则 `JwtProperties` 启动校验会 fail-fast 拒绝启动（这是有意的安全设计，杜绝弱密钥）：
+
+```bash
+# Linux/macOS
+export APP_JWT_SECRET=$(openssl rand -hex 32)
+# Windows PowerShell
+$env:APP_JWT_SECRET = -join ((1..64) | ForEach-Object { '{0:x}' -f (Get-Random -Max 16) })
+
+cd backend && mvn spring-boot:run
+```
+
+密钥要求：非空、≥32 字符、不含 `change-me` 占位串。仓库内无任何可用默认密钥。
+
