@@ -46,6 +46,39 @@ export interface DatasetMeta {
   labelColumn: string | null;
 }
 
+export interface UploadedDataset {
+  id: number;
+  code: string;
+  name: string;
+  description: string | null;
+  ownerUserId: number;
+  taskType: string;
+  sourceType: string;
+  featureColumns: string[];
+  numericColumns: string[];
+  labelColumn: string | null;
+  rowCount: number;
+  columnCount: number;
+  createdAt: string;
+}
+
+export interface UploadedDatasetDetail {
+  meta: UploadedDataset;
+  headers: string[];
+  previewRows: string[][];
+  previewLimit: number;
+}
+
+export interface UploadDatasetRequest {
+  userId: number;
+  name: string;
+  description?: string;
+  headers: string[];
+  rows: string[][];
+  labelColumn?: string | null;
+  taskType?: string;
+}
+
 export interface ExperimentConfig {
   learningType: LearningType;
   algorithm: string;

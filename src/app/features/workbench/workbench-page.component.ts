@@ -1,13 +1,15 @@
 ﻿import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Subscription, forkJoin } from 'rxjs';
+import { Subscription, forkJoin, of } from 'rxjs';
 
-import { AlgorithmMeta, ExperimentConfig, ExperimentRecord, LearningType, ParamValue, TrainingSessionSummary, UserProfile } from '../../core/models/platform.models';
+import { AlgorithmMeta, DatasetMeta, ExperimentConfig, ExperimentRecord, LearningType, ParamValue, TrainingSessionSummary, UploadedDataset, UserProfile } from '../../core/models/platform.models';
 import { CatalogApiService } from '../../core/services/catalog-api.service';
+import { DatasetUploadApiService } from '../../core/services/dataset-upload-api.service';
 import { ExperimentApiService } from '../../core/services/experiment-api.service';
 import { LoginPanelComponent } from '../auth/login-panel.component';
 import { ExperimentConfigPanelComponent } from '../config/experiment-config-panel.component';
+import { DatasetUploadPanelComponent } from '../datasets/dataset-upload-panel.component';
 import { ExperimentHistoryPanelComponent } from '../history/experiment-history-panel.component';
 import { TrainingControlPanelComponent } from '../training/training-control-panel.component';
 
@@ -19,6 +21,7 @@ import { TrainingControlPanelComponent } from '../training/training-control-pane
     FormsModule,
     LoginPanelComponent,
     ExperimentConfigPanelComponent,
+    DatasetUploadPanelComponent,
     ExperimentHistoryPanelComponent,
     TrainingControlPanelComponent
   ],
@@ -113,6 +116,11 @@ import { TrainingControlPanelComponent } from '../training/training-control-pane
         (refreshRequested)="loadHistory()"
         (loadRequested)="applyHistory($event)"
       ></app-experiment-history-panel>
+
+      <app-dataset-upload-panel
+        [user]="currentUser"
+        (datasetsChanged)="loadCatalogs()"
+      ></app-dataset-upload-panel>
 
       <app-training-control-panel
         [config]="activeConfig"
@@ -261,7 +269,7 @@ import { TrainingControlPanelComponent } from '../training/training-control-pane
 })
 export class WorkbenchPageComponent implements OnInit, OnDestroy {
   algorithms: AlgorithmMeta[] = [];
-  datasets: Array<{ id: number; code: string; name: string; description: string; taskType: string; sourceType: string; featureCount: number; sampleCount: number; labelColumn: string | null; }> = [];
+  datasets: DatasetMeta[] = [];
   activeConfig: ExperimentConfig | null = null;
   currentUser: UserProfile | null = null;
   experimentHistory: ExperimentRecord[] = [];
@@ -276,7 +284,8 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
 
   constructor(
     private readonly catalogApi: CatalogApiService,
-    private readonly experimentApi: ExperimentApiService
+    private readonly experimentApi: ExperimentApiService,
+    private readonly datasetUploadApi: DatasetUploadApiService
   ) {}
 
   get canSaveExperiment(): boolean {
@@ -291,6 +300,7 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
     this.currentUser = user;
     this.saveMessage = `欢迎回来，${user.displayName}。`;
     this.loadHistory();
+    this.loadCatalogs();
   }
 
   handleLogout(): void {
@@ -393,15 +403,18 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
     this.subscriptions.unsubscribe();
   }
 
-  private loadCatalogs(): void {
+  loadCatalogs(): void {
     this.catalogLoading = true;
+    const userId = this.currentUser?.userId ?? null;
     const sub = forkJoin({
       algorithms: this.catalogApi.listAlgorithms(),
-      datasets: this.catalogApi.listDatasets()
+      datasets: this.catalogApi.listDatasets(),
+      uploaded: userId != null ? this.datasetUploadApi.listUploaded(userId) : of<UploadedDataset[]>([])
     }).subscribe({
-      next: ({ algorithms, datasets }) => {
+      next: ({ algorithms, datasets, uploaded }) => {
         this.algorithms = algorithms;
-        this.datasets = datasets;
+        // 合并内置数据集与当前用户上传的数据集，前端可统一选择用于训练
+        this.datasets = [...datasets, ...uploaded.map((item) => this.toDatasetMeta(item))];
       },
       error: (error: unknown) => {
         this.saveMessage = error instanceof Error ? error.message : '元数据加载失败';
@@ -412,6 +425,20 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
       }
     });
     this.subscriptions.add(sub);
+  }
+
+  private toDatasetMeta(item: UploadedDataset): DatasetMeta {
+    return {
+      id: item.id,
+      code: item.code,
+      name: `${item.name}（上传）`,
+      description: item.description ?? '用户上传的 CSV 数据集',
+      taskType: item.taskType,
+      sourceType: item.sourceType,
+      featureCount: item.featureColumns.length,
+      sampleCount: item.rowCount,
+      labelColumn: item.labelColumn
+    };
   }
 
   private buildExperimentName(config: ExperimentConfig): string {

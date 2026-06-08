@@ -35,3 +35,8 @@ app:
   python:
     base-url: http://localhost:8000
     timeout-ms: 5000
+  dataset-upload:
+    max-rows: 1000
+    max-columns: 50
+    max-cell-length: 256
+    preview-limit: 20

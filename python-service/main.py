@@ -23,6 +23,7 @@ class InitTrainingRequest(BaseModel):
     labelColumn: str | None = None
     hyperParams: dict[str, Any] = Field(default_factory=dict)
     trainConfig: dict[str, Any] = Field(default_factory=dict)
+    customDataset: dict[str, Any] | None = None
 
 
 class StepTrainingRequest(BaseModel):
@@ -205,6 +206,9 @@ def run_loop(session: TrainingSession, target_steps: int, push_interval: int) ->
 def build_training_bundle(
     request: InitTrainingRequest,
 ) -> tuple[np.ndarray, np.ndarray | None, list[str], Any]:
+    if request.customDataset:
+        return build_custom_dataset_bundle(request)
+
     if request.algorithm == "linear_regression":
         x_train, y_train = build_linear_regression_dataset(request)
         learning_rate = float(request.hyperParams.get("learningRate", 0.01))
@@ -231,7 +235,59 @@ def build_training_bundle(
     raise HTTPException(status_code=400, detail=f"不支持的算法类型: {request.algorithm}")
 
 
-def build_linear_regression_dataset(request: InitTrainingRequest) -> tuple[np.ndarray, np.ndarray]:
+def build_custom_dataset_bundle(
+    request: InitTrainingRequest,
+) -> tuple[np.ndarray, np.ndarray | None, list[str], Any]:
+    """使用后端透传的上传数据集（已数值化）构建训练 bundle。"""
+    custom = request.customDataset or {}
+    raw_features = custom.get("features") or []
+    if not raw_features:
+        raise HTTPException(status_code=400, detail="上传数据集没有可用的特征数据")
+
+    x_train = np.asarray(raw_features, dtype=float)
+    if x_train.ndim != 2:
+        raise HTTPException(status_code=400, detail="上传数据集特征矩阵格式不正确")
+    raw_labels = custom.get("labels") or []
+
+    if request.algorithm == "linear_regression":
+        y_train = _coerce_numeric_labels(raw_labels, len(x_train))
+        learning_rate = float(request.hyperParams.get("learningRate", 0.01))
+        model = StepwiseLinearRegression(learning_rate=learning_rate)
+        model.initialize(x_train, y_train)
+        return x_train, y_train, [], model
+
+    if request.algorithm == "svm":
+        if not raw_labels:
+            raise HTTPException(status_code=400, detail="SVM 训练需要标签列")
+        label_names = sorted({str(item) for item in raw_labels})
+        label_index = {name: idx for idx, name in enumerate(label_names)}
+        y_train = np.asarray([label_index[str(item)] for item in raw_labels], dtype=int)
+        learning_rate = float(request.hyperParams.get("learningRate", 0.01))
+        model = StepwiseSVM(learning_rate=learning_rate)
+        model.initialize(x_train, y_train, label_names=label_names)
+        return x_train, y_train, label_names, model
+
+    if request.algorithm == "kmeans":
+        cluster_count = int(request.hyperParams.get("kValue", 3))
+        if cluster_count > len(x_train):
+            raise HTTPException(status_code=400, detail="聚类数不能超过样本数量")
+        model = StepwiseKMeans(n_clusters=cluster_count, random_state=42)
+        model.initialize(x_train)
+        return x_train, None, [], model
+
+    raise HTTPException(status_code=400, detail=f"不支持的算法类型: {request.algorithm}")
+
+
+def _coerce_numeric_labels(raw_labels: list[Any], expected: int) -> np.ndarray:
+    if not raw_labels:
+        raise HTTPException(status_code=400, detail="线性回归训练需要数值型标签列")
+    try:
+        values = [float(item) for item in raw_labels]
+    except (TypeError, ValueError) as error:
+        raise HTTPException(status_code=400, detail="线性回归标签列必须是数值") from error
+    if len(values) != expected:
+        raise HTTPException(status_code=400, detail="标签数量与样本数量不一致")
+    return np.asarray(values, dtype=float)
     feature_count = max(1, len(request.featureColumns))
     samples = 20
     x_axis = np.linspace(1.0, 5.0, samples)
