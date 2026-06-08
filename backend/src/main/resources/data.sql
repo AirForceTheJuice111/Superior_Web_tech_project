@@ -9,6 +9,18 @@ KEY(id) VALUES
 (2, 'boston', 'Boston Housing', '经典回归数据集，适合线性回归演示', 'supervised', 'builtin', 13, 506, 'price', CURRENT_TIMESTAMP()),
 (3, 'cluster_demo', 'Cluster Demo', '二维聚类演示数据集，适合 KMeans 聚类实验', 'unsupervised', 'builtin', 2, 180, NULL, CURRENT_TIMESTAMP());
 
+MERGE INTO uploaded_dataset (
+    id, code, name, description, owner_user_id, task_type, source_type,
+    feature_columns_json, numeric_columns_json, label_column,
+    headers_json, rows_json, row_count, column_count, created_at
+)
+KEY(id) VALUES
+(1, 'upload_demo_points', '上传演示-二维点', '演示用上传数据集（KMeans 可用）', 1, 'unsupervised', 'upload',
+ '["x1","x2"]', '["x1","x2"]', NULL,
+ '["x1","x2"]',
+ '[["-3.0","-2.0"],["-2.8","-1.6"],["2.8","2.4"],["3.1","2.0"],["4.0","-2.6"],["3.7","-2.9"]]',
+ 6, 2, CURRENT_TIMESTAMP());
+
 MERGE INTO algorithm_meta (id, code, name, category, learning_type, description, params_schema_json, created_at)
 KEY(id) VALUES
 (1, 'linear_regression', '线性回归', 'regression', 'supervised', '适合数值预测任务', '[{"key":"learningRate","label":"学习率","type":"number","defaultValue":0.01,"min":0.001,"max":1,"step":0.001},{"key":"epochs","label":"训练轮数","type":"number","defaultValue":100,"min":10,"max":1000,"step":10},{"key":"fitIntercept","label":"拟合截距","type":"boolean","defaultValue":true}]', CURRENT_TIMESTAMP()),
