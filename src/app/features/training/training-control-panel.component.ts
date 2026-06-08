@@ -3,15 +3,16 @@ import { Component, EventEmitter, Input, OnDestroy, Output } from '@angular/core
 import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
 
-import { ExperimentConfig, TrainingSessionSummary, TrainingStatusResponse, TrainingViewMode } from '../../core/models/platform.models';
+import { ExperimentConfig, RlParameters, TrainingSessionSummary, TrainingStatusResponse, TrainingViewMode } from '../../core/models/platform.models';
 import { TrainingApiService } from '../../core/services/training-api.service';
 import { MetricTrendChartComponent } from '../../shared/components/metric-trend-chart.component';
+import { ReinforcementGridVisualizerComponent } from '../../shared/components/reinforcement-grid-visualizer.component';
 import { TwoDimensionalVisualizerComponent } from '../../shared/components/two-dimensional-visualizer.component';
 
 @Component({
   selector: 'app-training-control-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule, TwoDimensionalVisualizerComponent, MetricTrendChartComponent],
+  imports: [CommonModule, FormsModule, TwoDimensionalVisualizerComponent, MetricTrendChartComponent, ReinforcementGridVisualizerComponent],
   template: `
     <section class="card">
       <div class="card-header">
@@ -69,10 +70,17 @@ import { TwoDimensionalVisualizerComponent } from '../../shared/components/two-d
       </div>
     </section>
 
-    <app-two-dimensional-visualizer
-      [mode]="viewMode"
-      [chartData]="trainingState.visualization"
-    ></app-two-dimensional-visualizer>
+    <app-reinforcement-grid-visualizer
+      *ngIf="isReinforcement; else planarChart"
+      [data]="rlParameters"
+    ></app-reinforcement-grid-visualizer>
+
+    <ng-template #planarChart>
+      <app-two-dimensional-visualizer
+        [mode]="viewMode"
+        [chartData]="trainingState.visualization"
+      ></app-two-dimensional-visualizer>
+    </ng-template>
 
     <div class="metrics-grid">
       <app-metric-trend-chart
@@ -184,6 +192,15 @@ export class TrainingControlPanelComponent implements OnDestroy {
       return 'classification';
     }
     return 'regression';
+  }
+
+  get isReinforcement(): boolean {
+    return this.config?.algorithm === 'q_learning' || this.config?.algorithm === 'dqn';
+  }
+
+  get rlParameters(): RlParameters | null {
+    const params = this.trainingState.parameters as Partial<RlParameters>;
+    return params && params.grid ? (params as RlParameters) : null;
   }
 
   get safeAccuracy(): number | null {
@@ -310,10 +327,10 @@ export class TrainingControlPanelComponent implements OnDestroy {
       visualization: payload.visualization || { points: [], boundary: [], centers: [] }
     };
 
-    this.appendMetric(this.lossHistory, payload.currentStep, payload.loss ?? 0);
+    this.lossHistory = this.appendMetric(this.lossHistory, payload.currentStep, payload.loss ?? 0);
     const accuracyValue = payload.metrics['accuracy'];
     if (typeof accuracyValue === 'number') {
-      this.appendMetric(this.accuracyHistory, payload.currentStep, accuracyValue);
+      this.accuracyHistory = this.appendMetric(this.accuracyHistory, payload.currentStep, accuracyValue);
     }
 
     this.emitSessionChange();
@@ -334,13 +351,12 @@ export class TrainingControlPanelComponent implements OnDestroy {
     });
   }
 
-  private appendMetric(history: Array<{ step: number; value: number }>, step: number, value: number): void {
+  private appendMetric(history: Array<{ step: number; value: number }>, step: number, value: number): Array<{ step: number; value: number }> {
     const existingIndex = history.findIndex((item) => item.step === step);
     if (existingIndex >= 0) {
-      history.splice(existingIndex, 1, { step, value });
-    } else {
-      history.push({ step, value });
+      return [...history.slice(0, existingIndex), { step, value }, ...history.slice(existingIndex + 1)];
     }
+    return [...history, { step, value }];
   }
 
   private buildInitPayload(): Record<string, unknown> {

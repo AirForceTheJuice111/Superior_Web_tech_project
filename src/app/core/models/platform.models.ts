@@ -46,6 +46,39 @@ export interface DatasetMeta {
   labelColumn: string | null;
 }
 
+export interface UploadedDataset {
+  id: number;
+  code: string;
+  name: string;
+  description: string | null;
+  ownerUserId: number;
+  taskType: string;
+  sourceType: string;
+  featureColumns: string[];
+  numericColumns: string[];
+  labelColumn: string | null;
+  rowCount: number;
+  columnCount: number;
+  createdAt: string;
+}
+
+export interface UploadedDatasetDetail {
+  meta: UploadedDataset;
+  headers: string[];
+  previewRows: string[][];
+  previewLimit: number;
+}
+
+export interface UploadDatasetRequest {
+  userId: number;
+  name: string;
+  description?: string;
+  headers: string[];
+  rows: string[][];
+  labelColumn?: string | null;
+  taskType?: string;
+}
+
 export interface ExperimentConfig {
   learningType: LearningType;
   algorithm: string;
@@ -106,6 +139,35 @@ export interface VisualizationData {
   points: ChartPoint[];
   boundary: ChartPoint[][];
   centers: ChartPoint[];
+}
+
+export type GridCellType = 'free' | 'obstacle' | 'trap' | 'goal' | 'start';
+
+export interface GridCell {
+  state: number;
+  row: number;
+  col: number;
+  type: GridCellType;
+  terminal: boolean;
+}
+
+export interface GridLayout {
+  size: number;
+  start: { row: number; col: number };
+  goal: { row: number; col: number };
+  obstacles: Array<{ row: number; col: number }>;
+  traps: Array<{ row: number; col: number }>;
+  cells: GridCell[];
+}
+
+export interface RlParameters {
+  grid: GridLayout;
+  policy: number[];
+  policyArrows: string[];
+  policyNames: string[];
+  stateValues: number[];
+  qTable: number[][];
+  epsilon: number;
 }
 
 export interface TrainingStatusResponse {

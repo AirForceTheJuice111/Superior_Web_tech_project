@@ -17,9 +17,12 @@ import com.example.mlplatform.persistence.entity.TrainingSessionEntity;
 import com.example.mlplatform.persistence.mapper.TrainingSessionMapper;
 import com.example.mlplatform.service.TrainingService;
 import com.example.mlplatform.service.TrainingStreamService;
+import com.example.mlplatform.service.UploadedDatasetService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Service;
 
@@ -34,28 +37,37 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class TrainingServiceImpl implements TrainingService {
 
+    private static final Logger log = LoggerFactory.getLogger(TrainingServiceImpl.class);
+
     private final Map<String, TrainingSession> sessionCache = new ConcurrentHashMap<>();
     private final PythonTrainingClient pythonTrainingClient;
     private final TaskExecutor taskExecutor;
     private final TrainingStreamService trainingStreamService;
     private final TrainingSessionMapper trainingSessionMapper;
     private final ObjectMapper objectMapper;
+    private final UploadedDatasetService uploadedDatasetService;
 
     public TrainingServiceImpl(PythonTrainingClient pythonTrainingClient,
                                TaskExecutor taskExecutor,
                                TrainingStreamService trainingStreamService,
                                TrainingSessionMapper trainingSessionMapper,
-                               ObjectMapper objectMapper) {
+                               ObjectMapper objectMapper,
+                               UploadedDatasetService uploadedDatasetService) {
         this.pythonTrainingClient = pythonTrainingClient;
         this.taskExecutor = taskExecutor;
         this.trainingStreamService = trainingStreamService;
         this.trainingSessionMapper = trainingSessionMapper;
         this.objectMapper = objectMapper;
+        this.uploadedDatasetService = uploadedDatasetService;
     }
 
     @Override
-    public TrainingSessionResponse createTraining(InitTrainingRequest request) {
+    public TrainingSessionResponse createTraining(InitTrainingRequest request, Long requesterUserId) {
         AlgorithmType type = AlgorithmType.fromCode(request.getAlgorithm());
+        // 若选择的是上传数据集，从库中取出数值样本封装为 customDataset 透传给 Python 服务（含归属校验）
+        uploadedDatasetService.buildCustomDataset(
+                        request.getDatasetId(), requesterUserId, request.getFeatureColumns(), request.getLabelColumn())
+                .ifPresent(request::setCustomDataset);
         TrainingSession session = buildBaseSession(type, request);
         Map<String, Object> payload = pythonTrainingClient.initTraining(request);
         session.setSessionId(readString(payload, "sessionId", "train_" + UUID.randomUUID().toString().replace("-", "")));
@@ -134,14 +146,30 @@ public class TrainingServiceImpl implements TrainingService {
 
     private void monitorPythonSession(String sessionId) {
         while (true) {
-            TrainingSession session = getSessionOrThrow(sessionId);
-            synchronized (session) {
-                applyPythonPayload(session, pythonTrainingClient.getStatus(sessionId));
-                saveSession(session);
-                publishSession(session);
-                if (session.getStatus() != TrainingStatus.RUNNING) {
-                    return;
+            try {
+                TrainingSession session = getSessionOrThrow(sessionId);
+                synchronized (session) {
+                    applyPythonPayload(session, pythonTrainingClient.getStatus(sessionId));
+                    saveSession(session);
+                    publishSession(session);
+                    if (session.getStatus() != TrainingStatus.RUNNING) {
+                        return;
+                    }
                 }
+            } catch (Exception e) {
+                log.error("监控训练会话失败 [sessionId={}]", sessionId, e);
+                try {
+                    TrainingSession session = getSessionOrThrow(sessionId);
+                    synchronized (session) {
+                        session.setStatus(TrainingStatus.FAILED);
+                        session.setUpdatedAt(LocalDateTime.now());
+                        saveSession(session);
+                        publishSession(session);
+                    }
+                } catch (Exception inner) {
+                    log.error("标记训练会话为FAILED时出错 [sessionId={}]", sessionId, inner);
+                }
+                return;
             }
 
             try {

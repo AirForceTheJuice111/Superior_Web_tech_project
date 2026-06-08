@@ -3,7 +3,9 @@ package com.example.mlplatform.common.enums;
 public enum AlgorithmType {
     LINEAR_REGRESSION,
     KMEANS,
-    SVM;
+    SVM,
+    Q_LEARNING,
+    DQN;
 
     public static AlgorithmType fromCode(String code) {
         if (code == null || code.isBlank()) {
@@ -14,6 +16,8 @@ public enum AlgorithmType {
             case "linear_regression" -> LINEAR_REGRESSION;
             case "kmeans" -> KMEANS;
             case "svm" -> SVM;
+            case "q_learning" -> Q_LEARNING;
+            case "dqn" -> DQN;
             default -> throw new IllegalArgumentException("不支持的算法类型: " + code);
         };
     }
@@ -23,6 +27,8 @@ public enum AlgorithmType {
             case LINEAR_REGRESSION -> "linear_regression";
             case KMEANS -> "kmeans";
             case SVM -> "svm";
+            case Q_LEARNING -> "q_learning";
+            case DQN -> "dqn";
         };
     }
 }

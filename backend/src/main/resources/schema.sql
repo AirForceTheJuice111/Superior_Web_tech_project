@@ -40,6 +40,24 @@ CREATE TABLE IF NOT EXISTS dataset_meta (
     created_at TIMESTAMP NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS uploaded_dataset (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(64) NOT NULL UNIQUE,
+    name VARCHAR(128) NOT NULL,
+    description VARCHAR(255),
+    owner_user_id BIGINT NOT NULL,
+    task_type VARCHAR(64) NOT NULL,
+    source_type VARCHAR(32) NOT NULL,
+    feature_columns_json CLOB NOT NULL,
+    numeric_columns_json CLOB NOT NULL,
+    label_column VARCHAR(128),
+    headers_json CLOB NOT NULL,
+    rows_json CLOB NOT NULL,
+    row_count INT NOT NULL,
+    column_count INT NOT NULL,
+    created_at TIMESTAMP NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS algorithm_meta (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     code VARCHAR(64) NOT NULL UNIQUE,

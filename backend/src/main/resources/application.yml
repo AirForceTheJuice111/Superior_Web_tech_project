@@ -1,5 +1,9 @@
 server:
   port: 8080
+  tomcat:
+    # 限制请求体吞咽上限（约 4MB），防止超大上传 JSON 撑爆堆；声明式行数/列数上限见 UploadDatasetRequest。
+    max-swallow-size: 4MB
+    max-http-form-post-size: 4MB
 
 spring:
   application:
@@ -35,3 +39,14 @@ app:
   python:
     base-url: http://localhost:8000
     timeout-ms: 5000
+  dataset-upload:
+    max-rows: 1000
+    max-columns: 50
+    max-cell-length: 256
+    preview-limit: 20
+  jwt:
+    # 密钥必须经环境变量 APP_JWT_SECRET 注入（≥32 字符随机串），无内置默认值。
+    # 本地开发示例：export APP_JWT_SECRET=$(openssl rand -hex 32)
+    secret: ${APP_JWT_SECRET:}
+    expiration-minutes: 120
+    issuer: mlplatform

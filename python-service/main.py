@@ -11,8 +11,10 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from sklearn.datasets import make_blobs
 
+from stepwise_dqn import StepwiseDQN
 from stepwise_kmeans import StepwiseKMeans
 from stepwise_linear_regression import StepwiseLinearRegression
+from stepwise_q_learning import StepwiseQLearning
 from stepwise_svm import StepwiseSVM
 
 
@@ -23,6 +25,7 @@ class InitTrainingRequest(BaseModel):
     labelColumn: str | None = None
     hyperParams: dict[str, Any] = Field(default_factory=dict)
     trainConfig: dict[str, Any] = Field(default_factory=dict)
+    customDataset: dict[str, Any] | None = None
 
 
 class StepTrainingRequest(BaseModel):
@@ -116,15 +119,16 @@ def run_training(session_id: str, request: RunTrainingRequest) -> dict[str, Any]
         session.stop_requested = False
 
     if request.async_mode:
-        thread = threading.Thread(
-            target=run_loop,
-            args=(session, request.targetSteps, request.pushInterval),
-            daemon=True,
-            name=f"py-run-{session_id}",
-        )
-        session.run_thread = thread
-        thread.start()
-        return build_status_response(session)
+        with session.lock:
+            thread = threading.Thread(
+                target=run_loop,
+                args=(session, request.targetSteps, request.pushInterval),
+                daemon=True,
+                name=f"py-run-{session_id}",
+            )
+            session.run_thread = thread
+            thread.start()
+            return build_status_response(session)
 
     run_loop(session, request.targetSteps, request.pushInterval)
     return build_status_response(session)
@@ -204,6 +208,9 @@ def run_loop(session: TrainingSession, target_steps: int, push_interval: int) ->
 def build_training_bundle(
     request: InitTrainingRequest,
 ) -> tuple[np.ndarray, np.ndarray | None, list[str], Any]:
+    if request.customDataset:
+        return build_custom_dataset_bundle(request)
+
     if request.algorithm == "linear_regression":
         x_train, y_train = build_linear_regression_dataset(request)
         learning_rate = float(request.hyperParams.get("learningRate", 0.01))
@@ -227,7 +234,88 @@ def build_training_bundle(
         model.initialize(x_train)
         return x_train, None, [], model
 
+    if request.algorithm == "q_learning":
+        grid_size = int(request.hyperParams.get("gridSize", 5))
+        model = StepwiseQLearning(
+            grid_size=grid_size,
+            learning_rate=float(request.hyperParams.get("learningRate", 0.1)),
+            discount_factor=float(request.hyperParams.get("discountFactor", 0.95)),
+            epsilon=float(request.hyperParams.get("epsilon", 0.2)),
+            random_state=42,
+        )
+        model.initialize()
+        return np.empty((0, 2), dtype=float), None, [], model
+
+    if request.algorithm == "dqn":
+        grid_size = int(request.hyperParams.get("gridSize", 5))
+        model = StepwiseDQN(
+            grid_size=grid_size,
+            learning_rate=float(request.hyperParams.get("learningRate", 0.01)),
+            discount_factor=float(request.hyperParams.get("discountFactor", 0.95)),
+            epsilon=float(request.hyperParams.get("epsilon", 0.3)),
+            batch_size=int(request.hyperParams.get("batchSize", 16)),
+            target_update_freq=int(request.hyperParams.get("targetUpdateFreq", 5)),
+            random_state=42,
+        )
+        model.initialize()
+        return np.empty((0, 2), dtype=float), None, [], model
+
     raise HTTPException(status_code=400, detail=f"不支持的算法类型: {request.algorithm}")
+
+
+def build_custom_dataset_bundle(
+    request: InitTrainingRequest,
+) -> tuple[np.ndarray, np.ndarray | None, list[str], Any]:
+    """使用后端透传的上传数据集（已数值化）构建训练 bundle。"""
+    custom = request.customDataset or {}
+    raw_features = custom.get("features") or []
+    if not raw_features:
+        raise HTTPException(status_code=400, detail="上传数据集没有可用的特征数据")
+
+    x_train = np.asarray(raw_features, dtype=float)
+    if x_train.ndim != 2:
+        raise HTTPException(status_code=400, detail="上传数据集特征矩阵格式不正确")
+    raw_labels = custom.get("labels") or []
+
+    if request.algorithm == "linear_regression":
+        y_train = _coerce_numeric_labels(raw_labels, len(x_train))
+        learning_rate = float(request.hyperParams.get("learningRate", 0.01))
+        model = StepwiseLinearRegression(learning_rate=learning_rate)
+        model.initialize(x_train, y_train)
+        return x_train, y_train, [], model
+
+    if request.algorithm == "svm":
+        if not raw_labels:
+            raise HTTPException(status_code=400, detail="SVM 训练需要标签列")
+        label_names = sorted({str(item) for item in raw_labels})
+        label_index = {name: idx for idx, name in enumerate(label_names)}
+        y_train = np.asarray([label_index[str(item)] for item in raw_labels], dtype=int)
+        learning_rate = float(request.hyperParams.get("learningRate", 0.01))
+        model = StepwiseSVM(learning_rate=learning_rate)
+        model.initialize(x_train, y_train, label_names=label_names)
+        return x_train, y_train, label_names, model
+
+    if request.algorithm == "kmeans":
+        cluster_count = int(request.hyperParams.get("kValue", 3))
+        if cluster_count > len(x_train):
+            raise HTTPException(status_code=400, detail="聚类数不能超过样本数量")
+        model = StepwiseKMeans(n_clusters=cluster_count, random_state=42)
+        model.initialize(x_train)
+        return x_train, None, [], model
+
+    raise HTTPException(status_code=400, detail=f"不支持的算法类型: {request.algorithm}")
+
+
+def _coerce_numeric_labels(raw_labels: list[Any], expected: int) -> np.ndarray:
+    if not raw_labels:
+        raise HTTPException(status_code=400, detail="线性回归训练需要数值型标签列")
+    try:
+        values = [float(item) for item in raw_labels]
+    except (TypeError, ValueError) as error:
+        raise HTTPException(status_code=400, detail="线性回归标签列必须是数值") from error
+    if len(values) != expected:
+        raise HTTPException(status_code=400, detail="标签数量与样本数量不一致")
+    return np.asarray(values, dtype=float)
 
 
 def build_linear_regression_dataset(request: InitTrainingRequest) -> tuple[np.ndarray, np.ndarray]:
@@ -276,6 +364,10 @@ def build_status_response(session: TrainingSession) -> dict[str, Any]:
         return build_svm_response(session)
     if session.algorithm == "kmeans":
         return build_kmeans_response(session)
+    if session.algorithm == "q_learning":
+        return build_rl_response(session, "qLearningError")
+    if session.algorithm == "dqn":
+        return build_rl_response(session, "tdLoss")
     raise HTTPException(status_code=400, detail=f"不支持的算法类型: {session.algorithm}")
 
 
@@ -348,6 +440,49 @@ def build_kmeans_response(session: TrainingSession) -> dict[str, Any]:
         },
         "predictions": build_kmeans_predictions(session, state["labels"]),
         "visualization": build_kmeans_visualization(session, state["labels"], state["centers"]),
+        "updatedAt": time.strftime("%Y-%m-%dT%H:%M:%S"),
+    }
+
+
+def build_rl_response(session: TrainingSession, loss_key: str) -> dict[str, Any]:
+    """统一构造 Q-Learning / DQN 的训练状态响应。
+
+    两个算法的 get_state() 输出同构（reward/loss/epsilon/policy/qTable/grid/...），
+    仅在 metrics 里用 loss_key 区分语义（qLearningError vs tdLoss），故复用一个 builder。
+    强化学习的网格、策略箭头、状态价值放进 parameters 供前端 RL 组件渲染，
+    通用 visualization 字段保持空结构以兼容前端模型约束。
+    """
+    state = session.model.get_state()
+    metrics: dict[str, Any] = {
+        "reward": state["reward"],
+        "epsilon": state["epsilon"],
+        "success": 1.0 if state["success"] else 0.0,
+        loss_key: state["loss"],
+    }
+    for optional_key in ("coverage", "replaySize"):
+        if optional_key in state:
+            metrics[optional_key] = state[optional_key]
+
+    return {
+        "sessionId": session.session_id,
+        "algorithm": session.algorithm,
+        "status": session.status,
+        "currentStep": state["step"],
+        "maxSteps": session.max_steps,
+        "progress": round(state["step"] / session.max_steps, 4) if session.max_steps else 0.0,
+        "loss": state["loss"],
+        "metrics": metrics,
+        "parameters": {
+            "grid": state["grid"],
+            "policy": state["policy"],
+            "policyArrows": state["policyArrows"],
+            "policyNames": state["policyNames"],
+            "stateValues": state["stateValues"],
+            "qTable": state["qTable"],
+            "epsilon": state["epsilon"],
+        },
+        "predictions": [],
+        "visualization": {"points": [], "boundary": [], "centers": []},
         "updatedAt": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }
 
@@ -496,7 +631,7 @@ def current_step(session: TrainingSession) -> int:
     return int(session.model.get_state()["step"])
 
 
-def validate_trainable(session: LinearRegressionSession) -> None:
+def validate_trainable(session: TrainingSession) -> None:
     if session.status == "stopped":
         raise HTTPException(status_code=400, detail="训练已停止，不能继续执行")
     if session.status == "completed":
