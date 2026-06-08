@@ -3,15 +3,16 @@ import { Component, EventEmitter, Input, OnDestroy, Output } from '@angular/core
 import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
 
-import { ExperimentConfig, TrainingSessionSummary, TrainingStatusResponse, TrainingViewMode } from '../../core/models/platform.models';
+import { ExperimentConfig, RlParameters, TrainingSessionSummary, TrainingStatusResponse, TrainingViewMode } from '../../core/models/platform.models';
 import { TrainingApiService } from '../../core/services/training-api.service';
 import { MetricTrendChartComponent } from '../../shared/components/metric-trend-chart.component';
+import { ReinforcementGridVisualizerComponent } from '../../shared/components/reinforcement-grid-visualizer.component';
 import { TwoDimensionalVisualizerComponent } from '../../shared/components/two-dimensional-visualizer.component';
 
 @Component({
   selector: 'app-training-control-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule, TwoDimensionalVisualizerComponent, MetricTrendChartComponent],
+  imports: [CommonModule, FormsModule, TwoDimensionalVisualizerComponent, MetricTrendChartComponent, ReinforcementGridVisualizerComponent],
   template: `
     <section class="card">
       <div class="card-header">
@@ -69,10 +70,17 @@ import { TwoDimensionalVisualizerComponent } from '../../shared/components/two-d
       </div>
     </section>
 
-    <app-two-dimensional-visualizer
-      [mode]="viewMode"
-      [chartData]="trainingState.visualization"
-    ></app-two-dimensional-visualizer>
+    <app-reinforcement-grid-visualizer
+      *ngIf="isReinforcement; else planarChart"
+      [data]="rlParameters"
+    ></app-reinforcement-grid-visualizer>
+
+    <ng-template #planarChart>
+      <app-two-dimensional-visualizer
+        [mode]="viewMode"
+        [chartData]="trainingState.visualization"
+      ></app-two-dimensional-visualizer>
+    </ng-template>
 
     <div class="metrics-grid">
       <app-metric-trend-chart
@@ -184,6 +192,15 @@ export class TrainingControlPanelComponent implements OnDestroy {
       return 'classification';
     }
     return 'regression';
+  }
+
+  get isReinforcement(): boolean {
+    return this.config?.algorithm === 'q_learning' || this.config?.algorithm === 'dqn';
+  }
+
+  get rlParameters(): RlParameters | null {
+    const params = this.trainingState.parameters as Partial<RlParameters>;
+    return params && params.grid ? (params as RlParameters) : null;
   }
 
   get safeAccuracy(): number | null {

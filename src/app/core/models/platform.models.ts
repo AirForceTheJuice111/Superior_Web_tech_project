@@ -108,6 +108,35 @@ export interface VisualizationData {
   centers: ChartPoint[];
 }
 
+export type GridCellType = 'free' | 'obstacle' | 'trap' | 'goal' | 'start';
+
+export interface GridCell {
+  state: number;
+  row: number;
+  col: number;
+  type: GridCellType;
+  terminal: boolean;
+}
+
+export interface GridLayout {
+  size: number;
+  start: { row: number; col: number };
+  goal: { row: number; col: number };
+  obstacles: Array<{ row: number; col: number }>;
+  traps: Array<{ row: number; col: number }>;
+  cells: GridCell[];
+}
+
+export interface RlParameters {
+  grid: GridLayout;
+  policy: number[];
+  policyArrows: string[];
+  policyNames: string[];
+  stateValues: number[];
+  qTable: number[][];
+  epsilon: number;
+}
+
 export interface TrainingStatusResponse {
   sessionId: string;
   algorithm: string;
