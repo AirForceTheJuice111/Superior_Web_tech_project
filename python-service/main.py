@@ -11,8 +11,10 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from sklearn.datasets import make_blobs
 
+from stepwise_dqn import StepwiseDQN
 from stepwise_kmeans import StepwiseKMeans
 from stepwise_linear_regression import StepwiseLinearRegression
+from stepwise_q_learning import StepwiseQLearning
 from stepwise_svm import StepwiseSVM
 
 
@@ -232,6 +234,32 @@ def build_training_bundle(
         model.initialize(x_train)
         return x_train, None, [], model
 
+    if request.algorithm == "q_learning":
+        grid_size = int(request.hyperParams.get("gridSize", 5))
+        model = StepwiseQLearning(
+            grid_size=grid_size,
+            learning_rate=float(request.hyperParams.get("learningRate", 0.1)),
+            discount_factor=float(request.hyperParams.get("discountFactor", 0.95)),
+            epsilon=float(request.hyperParams.get("epsilon", 0.2)),
+            random_state=42,
+        )
+        model.initialize()
+        return np.empty((0, 2), dtype=float), None, [], model
+
+    if request.algorithm == "dqn":
+        grid_size = int(request.hyperParams.get("gridSize", 5))
+        model = StepwiseDQN(
+            grid_size=grid_size,
+            learning_rate=float(request.hyperParams.get("learningRate", 0.01)),
+            discount_factor=float(request.hyperParams.get("discountFactor", 0.95)),
+            epsilon=float(request.hyperParams.get("epsilon", 0.3)),
+            batch_size=int(request.hyperParams.get("batchSize", 16)),
+            target_update_freq=int(request.hyperParams.get("targetUpdateFreq", 5)),
+            random_state=42,
+        )
+        model.initialize()
+        return np.empty((0, 2), dtype=float), None, [], model
+
     raise HTTPException(status_code=400, detail=f"不支持的算法类型: {request.algorithm}")
 
 
@@ -333,6 +361,10 @@ def build_status_response(session: TrainingSession) -> dict[str, Any]:
         return build_svm_response(session)
     if session.algorithm == "kmeans":
         return build_kmeans_response(session)
+    if session.algorithm == "q_learning":
+        return build_rl_response(session, "qLearningError")
+    if session.algorithm == "dqn":
+        return build_rl_response(session, "tdLoss")
     raise HTTPException(status_code=400, detail=f"不支持的算法类型: {session.algorithm}")
 
 
@@ -405,6 +437,49 @@ def build_kmeans_response(session: TrainingSession) -> dict[str, Any]:
         },
         "predictions": build_kmeans_predictions(session, state["labels"]),
         "visualization": build_kmeans_visualization(session, state["labels"], state["centers"]),
+        "updatedAt": time.strftime("%Y-%m-%dT%H:%M:%S"),
+    }
+
+
+def build_rl_response(session: TrainingSession, loss_key: str) -> dict[str, Any]:
+    """统一构造 Q-Learning / DQN 的训练状态响应。
+
+    两个算法的 get_state() 输出同构（reward/loss/epsilon/policy/qTable/grid/...），
+    仅在 metrics 里用 loss_key 区分语义（qLearningError vs tdLoss），故复用一个 builder。
+    强化学习的网格、策略箭头、状态价值放进 parameters 供前端 RL 组件渲染，
+    通用 visualization 字段保持空结构以兼容前端模型约束。
+    """
+    state = session.model.get_state()
+    metrics: dict[str, Any] = {
+        "reward": state["reward"],
+        "epsilon": state["epsilon"],
+        "success": 1.0 if state["success"] else 0.0,
+        loss_key: state["loss"],
+    }
+    for optional_key in ("coverage", "replaySize"):
+        if optional_key in state:
+            metrics[optional_key] = state[optional_key]
+
+    return {
+        "sessionId": session.session_id,
+        "algorithm": session.algorithm,
+        "status": session.status,
+        "currentStep": state["step"],
+        "maxSteps": session.max_steps,
+        "progress": round(state["step"] / session.max_steps, 4) if session.max_steps else 0.0,
+        "loss": state["loss"],
+        "metrics": metrics,
+        "parameters": {
+            "grid": state["grid"],
+            "policy": state["policy"],
+            "policyArrows": state["policyArrows"],
+            "policyNames": state["policyNames"],
+            "stateValues": state["stateValues"],
+            "qTable": state["qTable"],
+            "epsilon": state["epsilon"],
+        },
+        "predictions": [],
+        "visualization": {"points": [], "boundary": [], "centers": []},
         "updatedAt": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }
 
