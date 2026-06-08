@@ -17,6 +17,7 @@ import com.example.mlplatform.persistence.entity.TrainingSessionEntity;
 import com.example.mlplatform.persistence.mapper.TrainingSessionMapper;
 import com.example.mlplatform.service.TrainingService;
 import com.example.mlplatform.service.TrainingStreamService;
+import com.example.mlplatform.service.UploadedDatasetService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -44,22 +45,29 @@ public class TrainingServiceImpl implements TrainingService {
     private final TrainingStreamService trainingStreamService;
     private final TrainingSessionMapper trainingSessionMapper;
     private final ObjectMapper objectMapper;
+    private final UploadedDatasetService uploadedDatasetService;
 
     public TrainingServiceImpl(PythonTrainingClient pythonTrainingClient,
                                TaskExecutor taskExecutor,
                                TrainingStreamService trainingStreamService,
                                TrainingSessionMapper trainingSessionMapper,
-                               ObjectMapper objectMapper) {
+                               ObjectMapper objectMapper,
+                               UploadedDatasetService uploadedDatasetService) {
         this.pythonTrainingClient = pythonTrainingClient;
         this.taskExecutor = taskExecutor;
         this.trainingStreamService = trainingStreamService;
         this.trainingSessionMapper = trainingSessionMapper;
         this.objectMapper = objectMapper;
+        this.uploadedDatasetService = uploadedDatasetService;
     }
 
     @Override
     public TrainingSessionResponse createTraining(InitTrainingRequest request) {
         AlgorithmType type = AlgorithmType.fromCode(request.getAlgorithm());
+        // 若选择的是上传数据集，从库中取出数值样本封装为 customDataset 透传给 Python 服务
+        uploadedDatasetService.buildCustomDataset(
+                        request.getDatasetId(), request.getFeatureColumns(), request.getLabelColumn())
+                .ifPresent(request::setCustomDataset);
         TrainingSession session = buildBaseSession(type, request);
         Map<String, Object> payload = pythonTrainingClient.initTraining(request);
         session.setSessionId(readString(payload, "sessionId", "train_" + UUID.randomUUID().toString().replace("-", "")));

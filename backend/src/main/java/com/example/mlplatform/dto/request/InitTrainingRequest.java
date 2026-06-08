@@ -26,6 +26,12 @@ public class InitTrainingRequest {
     @NotNull(message = "trainConfig 不能为空")
     private Map<String, Object> trainConfig;
 
+    /**
+     * 上传数据集透传载荷。前端不直接提供；当 datasetId 命中某个上传数据集时，
+     * 由后端从库中取出数值化样本填充，再透传给 Python 算法服务。
+     */
+    private Map<String, Object> customDataset;
+
     public String getAlgorithm() {
         return algorithm;
     }
@@ -72,5 +78,13 @@ public class InitTrainingRequest {
 
     public void setTrainConfig(Map<String, Object> trainConfig) {
         this.trainConfig = trainConfig;
+    }
+
+    public Map<String, Object> getCustomDataset() {
+        return customDataset;
+    }
+
+    public void setCustomDataset(Map<String, Object> customDataset) {
+        this.customDataset = customDataset;
     }
 }
