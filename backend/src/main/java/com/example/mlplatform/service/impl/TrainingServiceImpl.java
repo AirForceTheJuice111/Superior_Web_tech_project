@@ -62,11 +62,11 @@ public class TrainingServiceImpl implements TrainingService {
     }
 
     @Override
-    public TrainingSessionResponse createTraining(InitTrainingRequest request) {
+    public TrainingSessionResponse createTraining(InitTrainingRequest request, Long requesterUserId) {
         AlgorithmType type = AlgorithmType.fromCode(request.getAlgorithm());
-        // 若选择的是上传数据集，从库中取出数值样本封装为 customDataset 透传给 Python 服务
+        // 若选择的是上传数据集，从库中取出数值样本封装为 customDataset 透传给 Python 服务（含归属校验）
         uploadedDatasetService.buildCustomDataset(
-                        request.getDatasetId(), request.getFeatureColumns(), request.getLabelColumn())
+                        request.getDatasetId(), requesterUserId, request.getFeatureColumns(), request.getLabelColumn())
                 .ifPresent(request::setCustomDataset);
         TrainingSession session = buildBaseSession(type, request);
         Map<String, Object> payload = pythonTrainingClient.initTraining(request);

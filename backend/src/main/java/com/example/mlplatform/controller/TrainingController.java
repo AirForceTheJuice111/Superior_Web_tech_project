@@ -6,6 +6,8 @@ import com.example.mlplatform.dto.request.RunTrainingRequest;
 import com.example.mlplatform.dto.request.StepTrainingRequest;
 import com.example.mlplatform.dto.response.TrainingSessionResponse;
 import com.example.mlplatform.dto.response.TrainingStatusResponse;
+import com.example.mlplatform.security.AuthPrincipal;
+import com.example.mlplatform.security.CurrentUser;
 import com.example.mlplatform.service.TrainingService;
 import com.example.mlplatform.service.TrainingStreamService;
 import jakarta.validation.Valid;
@@ -30,8 +32,9 @@ public class TrainingController {
     }
 
     @PostMapping
-    public ApiResponse<TrainingSessionResponse> createTraining(@Valid @RequestBody InitTrainingRequest request) {
-        return ApiResponse.success("训练会话创建成功", trainingService.createTraining(request));
+    public ApiResponse<TrainingSessionResponse> createTraining(@CurrentUser AuthPrincipal principal,
+                                                               @Valid @RequestBody InitTrainingRequest request) {
+        return ApiResponse.success("训练会话创建成功", trainingService.createTraining(request, principal.userId()));
     }
 
     @PostMapping("/{sessionId}/step")

@@ -84,8 +84,9 @@ public class UploadedDatasetServiceImpl implements UploadedDatasetService {
     }
 
     @Override
-    public UploadedDatasetDetailResponse getDetail(String code) {
+    public UploadedDatasetDetailResponse getDetail(String code, Long requesterUserId) {
         UploadedDatasetEntity entity = getOrThrow(code);
+        verifyOwnership(entity, requesterUserId);
         List<String> headers = readJson(entity.getHeadersJson(), STRING_LIST, List.of());
         List<List<String>> rows = readJson(entity.getRowsJson(), ROWS_TYPE, List.of());
         int limit = Math.max(1, uploadProperties.getPreviewLimit());
@@ -100,25 +101,21 @@ public class UploadedDatasetServiceImpl implements UploadedDatasetService {
 
     @Override
     public void delete(String code, Long requesterUserId) {
-        if (requesterUserId == null) {
-            throw new IllegalArgumentException("userId 不能为空");
-        }
         UploadedDatasetEntity entity = getOrThrow(code);
-        if (!entity.getOwnerUserId().equals(requesterUserId)) {
-            // 归属校验：禁止删除他人数据集
-            throw new IllegalArgumentException("无权删除该数据集");
-        }
+        verifyOwnership(entity, requesterUserId);
         uploadedDatasetMapper.deleteByCode(code);
     }
 
     @Override
     public Optional<Map<String, Object>> buildCustomDataset(String code,
+                                                            Long requesterUserId,
                                                             List<String> requestedFeatureColumns,
                                                             String requestedLabelColumn) {
         UploadedDatasetEntity entity = uploadedDatasetMapper.findByCode(code);
         if (entity == null) {
             return Optional.empty();
         }
+        verifyOwnership(entity, requesterUserId);
 
         List<String> headers = readJson(entity.getHeadersJson(), STRING_LIST, List.of());
         List<List<String>> rows = readJson(entity.getRowsJson(), ROWS_TYPE, List.of());
@@ -219,8 +216,9 @@ public class UploadedDatasetServiceImpl implements UploadedDatasetService {
     }
 
     /**
-     * 防 CSV 注入：对以 = + - @ 开头的单元格加前导单引号转义，避免被电子表格当作公式执行；
-     * 同时去除控制字符并限制单元格长度。后端只做存储，不解释任何单元格内容。
+     * 防 CSV 注入：对以 = + - @ 开头的<b>非数值</b>单元格加前导单引号转义，避免被电子表格当作公式执行；
+     * 合法数值（含负号、正号、科学计数）不转义，以免破坏数据。同时去除控制字符并限制单元格长度。
+     * 后端只做存储，不解释任何单元格内容。
      */
     private String sanitizeCell(String value) {
         String cleaned = value.replaceAll("[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]", "").trim();
@@ -229,7 +227,9 @@ public class UploadedDatasetServiceImpl implements UploadedDatasetService {
         }
         if (!cleaned.isEmpty()) {
             char first = cleaned.charAt(0);
-            if (first == '=' || first == '+' || first == '-' || first == '@') {
+            boolean formulaTrigger = first == '=' || first == '+' || first == '-' || first == '@';
+            // 仅当不是合法数值时才转义，避免把 -3.0 / +1.5 / -1e5 等数值改写成文本。
+            if (formulaTrigger && parseDouble(cleaned) == null) {
                 return "'" + cleaned;
             }
         }
@@ -309,16 +309,22 @@ public class UploadedDatasetServiceImpl implements UploadedDatasetService {
         return labelColumn == null ? "unsupervised" : "supervised";
     }
 
+    /** 严格的十进制数值匹配：拒绝 NaN/Infinity、类型后缀(1f/1d)、十六进制浮点，保证与 Python float() 解析口径一致。 */
+    private static final java.util.regex.Pattern DECIMAL_NUMBER =
+            java.util.regex.Pattern.compile("[-+]?(\\d+\\.?\\d*|\\.\\d+)([eE][-+]?\\d+)?");
+
     private Double parseDouble(String value) {
         if (value == null) {
             return null;
         }
         String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
+        if (trimmed.isEmpty() || !DECIMAL_NUMBER.matcher(trimmed).matches()) {
             return null;
         }
         try {
-            return Double.parseDouble(trimmed);
+            double parsed = Double.parseDouble(trimmed);
+            // 双保险：排除溢出为 Infinity 的超长数字，避免污染训练与破坏 JSON 序列化。
+            return Double.isFinite(parsed) ? parsed : null;
         } catch (NumberFormatException exception) {
             return null;
         }
@@ -334,6 +340,16 @@ public class UploadedDatasetServiceImpl implements UploadedDatasetService {
             throw new IllegalArgumentException("未找到上传数据集: " + code);
         }
         return entity;
+    }
+
+    /** 归属校验：禁止访问他人数据集。requesterUserId 由认证主体提供，非客户端自报。 */
+    private void verifyOwnership(UploadedDatasetEntity entity, Long requesterUserId) {
+        if (requesterUserId == null) {
+            throw new IllegalArgumentException("缺少访问者身份");
+        }
+        if (!requesterUserId.equals(entity.getOwnerUserId())) {
+            throw new IllegalArgumentException("无权访问该数据集");
+        }
     }
 
     private UploadedDatasetResponse toResponse(UploadedDatasetEntity entity) {

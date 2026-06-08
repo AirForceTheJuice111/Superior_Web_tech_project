@@ -8,7 +8,7 @@ import com.example.mlplatform.dto.response.TrainingStatusResponse;
 
 public interface TrainingService {
 
-    TrainingSessionResponse createTraining(InitTrainingRequest request);
+    TrainingSessionResponse createTraining(InitTrainingRequest request, Long requesterUserId);
 
     TrainingStatusResponse stepTraining(String sessionId, StepTrainingRequest request);
 

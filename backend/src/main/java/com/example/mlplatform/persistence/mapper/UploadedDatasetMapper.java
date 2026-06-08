@@ -41,7 +41,7 @@ public interface UploadedDatasetMapper {
             SELECT id, code, name, description, owner_user_id AS ownerUserId,
                    task_type AS taskType, source_type AS sourceType,
                    feature_columns_json AS featureColumnsJson, numeric_columns_json AS numericColumnsJson,
-                   label_column AS labelColumn, headers_json AS headersJson, rows_json AS rowsJson,
+                   label_column AS labelColumn,
                    row_count AS rowCount, column_count AS columnCount, created_at AS createdAt
             FROM uploaded_dataset
             WHERE owner_user_id = #{ownerUserId}
