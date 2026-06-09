@@ -5,6 +5,7 @@ import { Subscription } from 'rxjs';
 
 import { ExperimentConfig, TrainingSessionSummary, TrainingStatusResponse, TrainingViewMode } from '../../core/models/platform.models';
 import { TrainingApiService } from '../../core/services/training-api.service';
+import { GridWorldVisualizerComponent } from '../../shared/components/gridworld-visualizer.component';
 import { MetricTrendChartComponent } from '../../shared/components/metric-trend-chart.component';
 import { TwoDimensionalVisualizerComponent } from '../../shared/components/two-dimensional-visualizer.component';
 import { EvaluationMetricsPanelComponent } from './evaluation-metrics-panel.component';
@@ -13,7 +14,7 @@ import { ModelExplanationPanelComponent } from './model-explanation-panel.compon
 @Component({
   selector: 'app-training-control-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule, TwoDimensionalVisualizerComponent, MetricTrendChartComponent, EvaluationMetricsPanelComponent, ModelExplanationPanelComponent],
+  imports: [CommonModule, FormsModule, TwoDimensionalVisualizerComponent, GridWorldVisualizerComponent, MetricTrendChartComponent, EvaluationMetricsPanelComponent, ModelExplanationPanelComponent],
   template: `
     <section class="card">
       <div class="card-header">
@@ -86,10 +87,16 @@ import { ModelExplanationPanelComponent } from './model-explanation-panel.compon
       [visualization]="trainingState.visualization"
     ></app-model-explanation-panel>
 
-    <app-two-dimensional-visualizer
-      [mode]="viewMode"
-      [chartData]="trainingState.visualization"
-    ></app-two-dimensional-visualizer>
+    <app-gridworld-visualizer
+      *ngIf="viewMode === 'reinforcement'; else scatterViz"
+      [parameters]="trainingState.parameters"
+    ></app-gridworld-visualizer>
+    <ng-template #scatterViz>
+      <app-two-dimensional-visualizer
+        [mode]="viewMode"
+        [chartData]="trainingState.visualization"
+      ></app-two-dimensional-visualizer>
+    </ng-template>
 
     <div class="metrics-grid">
       <app-metric-trend-chart
@@ -194,6 +201,9 @@ export class TrainingControlPanelComponent implements OnDestroy {
   constructor(private readonly trainingApi: TrainingApiService) {}
 
   get viewMode(): TrainingViewMode {
+    if (this.config?.algorithm === 'q_learning') {
+      return 'reinforcement';
+    }
     if (this.config?.algorithm === 'pca') {
       return 'projection';
     }
@@ -332,8 +342,11 @@ export class TrainingControlPanelComponent implements OnDestroy {
 
     this.lossHistory = this.appendMetric(this.lossHistory, payload.currentStep, payload.loss ?? 0);
     const accuracyValue = payload.metrics['accuracy'];
+    const successRate = payload.metrics['successRate'];
     if (typeof accuracyValue === 'number') {
       this.accuracyHistory = this.appendMetric(this.accuracyHistory, payload.currentStep, accuracyValue);
+    } else if (typeof successRate === 'number') {
+      this.accuracyHistory = this.appendMetric(this.accuracyHistory, payload.currentStep, successRate);
     }
 
     this.emitSessionChange();
@@ -366,8 +379,10 @@ export class TrainingControlPanelComponent implements OnDestroy {
     const algorithm = this.config?.algorithm ?? 'linear_regression';
     const hyperParams = { ...(this.config?.params ?? {}) };
     const customDataset = this.config?.customDataset ?? null;
-    const featureColumns = customDataset?.featureColumns?.length ? customDataset.featureColumns : ['x1', 'x2'];
-    const labelColumn = ['kmeans', 'pca'].includes(algorithm) ? null : customDataset?.labelColumn ?? 'label';
+    const featureColumns = customDataset?.featureColumns?.length
+      ? customDataset.featureColumns
+      : (algorithm === 'q_learning' ? ['state'] : ['x1', 'x2']);
+    const labelColumn = ['kmeans', 'pca', 'q_learning'].includes(algorithm) ? null : customDataset?.labelColumn ?? 'label';
 
     if (algorithm === 'svm' && !('learningRate' in hyperParams)) {
       hyperParams['learningRate'] = 0.01;
@@ -412,6 +427,23 @@ export class TrainingControlPanelComponent implements OnDestroy {
       }
       if (!('standardize' in hyperParams)) {
         hyperParams['standardize'] = true;
+      }
+    }
+    if (algorithm === 'q_learning') {
+      if (!('gridSize' in hyperParams)) {
+        hyperParams['gridSize'] = 5;
+      }
+      if (!('epsilon' in hyperParams)) {
+        hyperParams['epsilon'] = 0.2;
+      }
+      if (!('learningRate' in hyperParams)) {
+        hyperParams['learningRate'] = 0.1;
+      }
+      if (!('gamma' in hyperParams)) {
+        hyperParams['gamma'] = 0.9;
+      }
+      if (!('maxEpisodeSteps' in hyperParams)) {
+        hyperParams['maxEpisodeSteps'] = 100;
       }
     }
 

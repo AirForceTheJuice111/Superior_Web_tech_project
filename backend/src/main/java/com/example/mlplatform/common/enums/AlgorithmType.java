@@ -7,7 +7,8 @@ public enum AlgorithmType {
     LOGISTIC_REGRESSION,
     DECISION_TREE,
     RANDOM_FOREST,
-    PCA;
+    PCA,
+    Q_LEARNING;
 
     public static AlgorithmType fromCode(String code) {
         if (code == null || code.isBlank()) {
@@ -22,6 +23,7 @@ public enum AlgorithmType {
             case "decision_tree" -> DECISION_TREE;
             case "random_forest" -> RANDOM_FOREST;
             case "pca" -> PCA;
+            case "q_learning" -> Q_LEARNING;
             default -> throw new IllegalArgumentException("不支持的算法类型: " + code);
         };
     }
@@ -35,6 +37,7 @@ public enum AlgorithmType {
             case DECISION_TREE -> "decision_tree";
             case RANDOM_FOREST -> "random_forest";
             case PCA -> "pca";
+            case Q_LEARNING -> "q_learning";
         };
     }
 }

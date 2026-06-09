@@ -470,6 +470,9 @@ export class ModelExplanationPanelComponent {
     if (this.algorithm === 'pca') {
       return '主成分解释';
     }
+    if (this.algorithm === 'q_learning') {
+      return '策略与价值函数解释';
+    }
     return '线性参数解释';
   }
 
@@ -491,6 +494,9 @@ export class ModelExplanationPanelComponent {
     }
     if (this.algorithm === 'pca') {
       return 'PCA 将原始特征重新组合为主成分，解释方差越高说明二维投影保留的原始信息越多。';
+    }
+    if (this.algorithm === 'q_learning') {
+      return 'Q-Learning 通过 Q 值表记录每个格子各动作的长期收益，贪心策略选取最大 Q 值动作，价值热力图从终点向起点扩散，箭头收敛为最优策略。';
     }
     return '线性模型将每个特征乘以对应权重后相加，权重大小和正负方向共同决定预测结果。';
   }
@@ -601,6 +607,21 @@ export class ModelExplanationPanelComponent {
           hint: `第 ${index + 1} 个主成分解释的方差比例。`
         });
       });
+    }
+
+    if (this.algorithm === 'q_learning') {
+      this.pushNumberStat(items, 'gridSize', 'Grid Size', '网格边长，状态总数为其平方。');
+      this.pushNumberStat(items, 'gamma', 'γ 折扣因子', '未来奖励的折扣系数，越大越重视长期收益。');
+      this.pushNumberStat(items, 'alpha', 'α 学习率', 'Q 值每次更新的步长。');
+      this.pushNumberStat(items, 'epsilon', 'ε 探索率', '当前以随机动作探索的概率，随训练衰减。');
+      const path = this.parameters['path'];
+      if (Array.isArray(path) && path.length > 0) {
+        items.push({
+          label: '当前贪心路径长度',
+          value: String(path.length),
+          hint: '按当前策略从起点走到终点经过的格子数，越短越优。'
+        });
+      }
     }
 
     if (this.sampleCount > 0) {

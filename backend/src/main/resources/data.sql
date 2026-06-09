@@ -5,9 +5,10 @@ KEY(id) VALUES
 
 MERGE INTO dataset_meta (id, code, name, description, task_type, source_type, feature_count, sample_count, label_column, created_at)
 KEY(id) VALUES
-(1, 'iris', 'Iris', '经典分类数据集，适合 SVM 分类演示', 'supervised', 'builtin', 4, 150, 'species', CURRENT_TIMESTAMP()),
-(2, 'boston', 'Boston Housing', '经典回归数据集，适合线性回归演示', 'supervised', 'builtin', 13, 506, 'price', CURRENT_TIMESTAMP()),
-(3, 'cluster_demo', 'Cluster Demo', '二维聚类演示数据集，适合 KMeans 聚类实验', 'unsupervised', 'builtin', 2, 180, NULL, CURRENT_TIMESTAMP());
+(1, 'iris', 'Iris 鸢尾花', '真实鸢尾花分类数据集，适合 SVM/逻辑回归/决策树分类演示', 'supervised', 'builtin', 4, 150, 'species', CURRENT_TIMESTAMP()),
+(2, 'california', 'California 房价', '真实加州房价回归数据集，适合线性回归演示', 'supervised', 'builtin', 8, 20640, 'price', CURRENT_TIMESTAMP()),
+(3, 'cluster_demo', 'Cluster Demo', '二维聚类演示数据集，适合 KMeans 聚类实验', 'unsupervised', 'builtin', 2, 180, NULL, CURRENT_TIMESTAMP()),
+(4, 'gridworld', 'GridWorld 网格世界', '强化学习网格环境，智能体从起点学习走到终点的最优策略', 'reinforcement', 'builtin', 2, 25, NULL, CURRENT_TIMESTAMP());
 
 MERGE INTO algorithm_meta (id, code, name, category, learning_type, description, params_schema_json, created_at)
 KEY(id) VALUES
@@ -22,18 +23,22 @@ KEY(id) VALUES
 (6, 'random_forest', '随机森林', 'classification', 'supervised', '通过多棵决策树投票提升分类稳定性，适合观察集成学习和特征重要性', '[{"key":"nEstimators","label":"树数量","type":"number","defaultValue":30,"min":5,"max":100,"step":5},{"key":"treesPerStep","label":"每步新增树","type":"number","defaultValue":5,"min":1,"max":20,"step":1},{"key":"maxDepth","label":"最大深度","type":"number","defaultValue":4,"min":1,"max":12,"step":1},{"key":"minSamplesSplit","label":"最小分裂样本数","type":"number","defaultValue":2,"min":2,"max":20,"step":1}]', CURRENT_TIMESTAMP()),
 (7, 'pca', 'PCA', 'dimensionality_reduction', 'unsupervised', '将高维特征投影到二维主成分空间，观察解释方差和降维分布', '[{"key":"nComponents","label":"主成分数","type":"number","defaultValue":2,"min":2,"max":2,"step":1},{"key":"standardize","label":"标准化特征","type":"boolean","defaultValue":true}]', CURRENT_TIMESTAMP());
 
+MERGE INTO algorithm_meta (id, code, name, category, learning_type, description, params_schema_json, created_at)
+KEY(id) VALUES
+(8, 'q_learning', 'Q-Learning', 'reinforcement_learning', 'reinforcement', '在 GridWorld 网格环境中通过 Q 值表学习从起点到终点的最优策略，可视化价值热力图、策略箭头与智能体路径', '[{"key":"gridSize","label":"网格大小","type":"number","defaultValue":5,"min":3,"max":8,"step":1},{"key":"epsilon","label":"探索率 ε","type":"number","defaultValue":0.2,"min":0.0,"max":1.0,"step":0.01},{"key":"learningRate","label":"学习率 α","type":"number","defaultValue":0.1,"min":0.01,"max":1.0,"step":0.01},{"key":"gamma","label":"折扣因子 γ","type":"number","defaultValue":0.9,"min":0.0,"max":1.0,"step":0.05},{"key":"maxEpisodeSteps","label":"单回合最大步数","type":"number","defaultValue":100,"min":20,"max":300,"step":10}]', CURRENT_TIMESTAMP());
+
 MERGE INTO experiment_case (
     id, code, title, description, learning_type, algorithm_code, dataset_code,
     config_json, guide_text, expected_result, display_order, created_at
 )
 KEY(id) VALUES
-(1, 'linear_regression_basic', '线性回归：观察权重如何拟合数据', '使用线性回归观察权重、偏置和回归线随训练逐步靠近样本趋势。', 'supervised', 'linear_regression', 'boston',
- '{"learningType":"supervised","algorithm":"linear_regression","dataset":"boston","params":{"learningRate":0.01,"epochs":100,"fitIntercept":true}}',
+(1, 'linear_regression_basic', '线性回归：观察权重如何拟合数据', '使用线性回归观察权重、偏置和回归线随训练逐步靠近样本趋势。', 'supervised', 'linear_regression', 'california',
+ '{"learningType":"supervised","algorithm":"linear_regression","dataset":"california","params":{"learningRate":0.01,"epochs":100,"fitIntercept":true}}',
  '1. 载入案例后点击初始化。2. 连续点击单步执行，观察 loss 曲线下降。3. 查看模型解释面板中的权重和 Bias 如何变化。4. 对照二维可视化中的回归线是否逐渐贴近样本点。',
  '随着训练步数增加，MSE 通常下降，回归线逐渐靠近样本点，权重和 Bias 会从初始值逐步调整到更合理的位置。',
  1, CURRENT_TIMESTAMP()),
-(2, 'linear_regression_large_lr', '线性回归：学习率过大对收敛的影响', '调大学习率，观察参数更新幅度和 loss 曲线变化。', 'supervised', 'linear_regression', 'boston',
- '{"learningType":"supervised","algorithm":"linear_regression","dataset":"boston","params":{"learningRate":0.08,"epochs":100,"fitIntercept":true}}',
+(2, 'linear_regression_large_lr', '线性回归：学习率过大对收敛的影响', '调大学习率，观察参数更新幅度和 loss 曲线变化。', 'supervised', 'linear_regression', 'california',
+ '{"learningType":"supervised","algorithm":"linear_regression","dataset":"california","params":{"learningRate":0.08,"epochs":100,"fitIntercept":true}}',
  '1. 载入案例后初始化训练。2. 与学习率 0.01 的案例对比。3. 单步观察 loss 和权重变化幅度。4. 如果曲线波动或下降不稳定，思考学习率对梯度下降的影响。',
  '较大的学习率会让参数更新更快，但也可能让 loss 曲线更不稳定，体现梯度下降中步长选择的重要性。',
  2, CURRENT_TIMESTAMP()),
@@ -51,4 +56,9 @@ KEY(id) VALUES
  '{"learningType":"unsupervised","algorithm":"kmeans","dataset":"cluster_demo","params":{"kValue":5,"maxIter":100,"initMethod":"k-means++"}}',
  '1. 先运行 K=3 案例。2. 再载入本案例并初始化。3. 对比中心数量、簇分布、Inertia 和 Silhouette。4. 思考 K 值过大时聚类是否被切得过碎。',
  'K 增大后中心点更多，Inertia 可能下降，但 Silhouette 不一定提升；这能帮助理解 K 值选择并非越大越好。',
- 5, CURRENT_TIMESTAMP());
+ 5, CURRENT_TIMESTAMP()),
+(6, 'q_learning_gridworld', 'Q-Learning：GridWorld 最优路径学习', '在网格世界中观察智能体如何通过 Q 值表逐步学会从起点走到终点的最优路径。', 'reinforcement', 'q_learning', 'gridworld',
+ '{"learningType":"reinforcement","algorithm":"q_learning","dataset":"gridworld","params":{"gridSize":5,"epsilon":0.2,"learningRate":0.1,"gamma":0.9,"maxEpisodeSteps":100}}',
+ '1. 载入案例后初始化。2. 连续单步执行，观察网格中价值热力图逐渐成形。3. 查看每格的策略箭头是否指向终点。4. 观察智能体路径（高亮）是否变短，以及 Episode Reward 上升、ε 衰减。',
+ '随着回合增加，价值热力图从终点向起点扩散，策略箭头收敛到指向终点的最优方向，智能体路径变短，成功率接近 1，平均奖励上升。',
+ 6, CURRENT_TIMESTAMP());

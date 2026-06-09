@@ -89,6 +89,7 @@ import { TrainingControlPanelComponent } from '../training/training-control-pane
           [loading]="catalogLoading"
           [selectedConfig]="activeConfig"
           (configChange)="handleConfigChange($event)"
+          (datasetSaved)="reloadDatasets()"
         ></app-experiment-config-panel>
 
         <section class="card side-card">
@@ -436,6 +437,15 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.subscriptions.unsubscribe();
+  }
+
+  reloadDatasets(): void {
+    const sub = this.catalogApi.listDatasets().subscribe({
+      next: (datasets) => {
+        this.datasets = datasets;
+      }
+    });
+    this.subscriptions.add(sub);
   }
 
   private loadCatalogs(): void {

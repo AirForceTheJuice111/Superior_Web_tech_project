@@ -51,7 +51,8 @@ export class TwoDimensionalVisualizerComponent implements AfterViewInit, OnChang
       classification: '分类',
       regression: '回归',
       clustering: '聚类',
-      projection: '降维'
+      projection: '降维',
+      reinforcement: '强化学习'
     }[this.mode];
   }
 

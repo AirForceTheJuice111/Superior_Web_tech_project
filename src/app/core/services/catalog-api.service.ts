@@ -1,7 +1,7 @@
 ﻿import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
-import { AlgorithmMeta, DatasetMeta } from '../models/platform.models';
+import { AlgorithmMeta, CustomDatasetPayload, DatasetMeta } from '../models/platform.models';
 import { ApiClientService } from './api-client.service';
 
 @Injectable({ providedIn: 'root' })
@@ -14,5 +14,15 @@ export class CatalogApiService {
 
   listDatasets(): Observable<DatasetMeta[]> {
     return this.apiClient.get<DatasetMeta[]>('/datasets');
+  }
+
+  createDataset(payload: CustomDatasetPayload): Observable<DatasetMeta> {
+    return this.apiClient.post<DatasetMeta>('/datasets', {
+      name: payload.name,
+      columns: payload.columns,
+      rows: payload.rows,
+      featureColumns: payload.featureColumns,
+      labelColumn: payload.labelColumn
+    });
   }
 }

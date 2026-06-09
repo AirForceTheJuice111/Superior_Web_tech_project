@@ -15,6 +15,7 @@ import com.example.mlplatform.model.TrainingSession;
 import com.example.mlplatform.model.VisualizationData;
 import com.example.mlplatform.persistence.entity.TrainingSessionEntity;
 import com.example.mlplatform.persistence.mapper.TrainingSessionMapper;
+import com.example.mlplatform.service.DatasetService;
 import com.example.mlplatform.service.TrainingService;
 import com.example.mlplatform.service.TrainingStreamService;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -43,22 +44,26 @@ public class TrainingServiceImpl implements TrainingService {
     private final TaskExecutor taskExecutor;
     private final TrainingStreamService trainingStreamService;
     private final TrainingSessionMapper trainingSessionMapper;
+    private final DatasetService datasetService;
     private final ObjectMapper objectMapper;
 
     public TrainingServiceImpl(PythonTrainingClient pythonTrainingClient,
                                TaskExecutor taskExecutor,
                                TrainingStreamService trainingStreamService,
                                TrainingSessionMapper trainingSessionMapper,
+                               DatasetService datasetService,
                                ObjectMapper objectMapper) {
         this.pythonTrainingClient = pythonTrainingClient;
         this.taskExecutor = taskExecutor;
         this.trainingStreamService = trainingStreamService;
         this.trainingSessionMapper = trainingSessionMapper;
+        this.datasetService = datasetService;
         this.objectMapper = objectMapper;
     }
 
     @Override
     public TrainingSessionResponse createTraining(InitTrainingRequest request) {
+        injectUploadedDatasetIfNeeded(request);
         AlgorithmType type = AlgorithmType.fromCode(request.getAlgorithm());
         TrainingSession session = buildBaseSession(type, request);
         Map<String, Object> payload = pythonTrainingClient.initTraining(request);
@@ -67,6 +72,31 @@ public class TrainingServiceImpl implements TrainingService {
         saveSession(session);
         publishSession(session);
         return toSessionResponse(session);
+    }
+
+    /**
+     * 当选择的是已落库的上传数据集且请求未携带 customDataset 时，
+     * 从数据库读取行数据注入请求，并用其特征列/标签列覆盖请求，
+     * 之后透明转发给 Python（Python 端逻辑不变）。
+     */
+    @SuppressWarnings("unchecked")
+    private void injectUploadedDatasetIfNeeded(InitTrainingRequest request) {
+        if (request.getCustomDataset() != null) {
+            return;
+        }
+        Map<String, Object> payload = datasetService.loadCustomDataset(request.getDatasetId());
+        if (payload == null) {
+            return;
+        }
+        request.setCustomDataset(payload);
+        Object featureColumns = payload.get("featureColumns");
+        if (featureColumns instanceof List<?> list && !list.isEmpty()) {
+            request.setFeatureColumns((List<String>) featureColumns);
+        }
+        Object labelColumn = payload.get("labelColumn");
+        if (labelColumn instanceof String label && !label.isBlank()) {
+            request.setLabelColumn(label);
+        }
     }
 
     @Override

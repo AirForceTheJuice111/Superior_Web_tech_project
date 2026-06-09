@@ -1,5 +1,5 @@
 ﻿export type LearningType = 'supervised' | 'unsupervised' | 'reinforcement';
-export type TrainingViewMode = 'classification' | 'regression' | 'clustering' | 'projection';
+export type TrainingViewMode = 'classification' | 'regression' | 'clustering' | 'projection' | 'reinforcement';
 export type ParamValue = string | number | boolean;
 export type ParamInputType = 'number' | 'select' | 'boolean' | 'switch';
 
@@ -134,6 +134,16 @@ export interface VisualizationData {
   points: ChartPoint[];
   boundary: ChartPoint[][];
   centers: ChartPoint[];
+}
+
+export interface GridWorldState {
+  gridSize: number;
+  start: [number, number];
+  goal: [number, number];
+  obstacles: Array<[number, number]>;
+  values: number[][];
+  policy: number[][];
+  path: Array<[number, number]>;
 }
 
 export interface TrainingStatusResponse {

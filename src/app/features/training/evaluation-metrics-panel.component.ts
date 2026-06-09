@@ -151,6 +151,9 @@ export class EvaluationMetricsPanelComponent {
   @Input() parameters: Record<string, unknown> = {};
 
   get modeLabel(): string {
+    if (this.algorithm === 'q_learning') {
+      return '强化学习评估';
+    }
     if (this.algorithm === 'pca') {
       return '降维评估';
     }
@@ -164,6 +167,9 @@ export class EvaluationMetricsPanelComponent {
   }
 
   get summaryText(): string {
+    if (this.algorithm === 'q_learning') {
+      return '展示平均奖励、成功率、到达终点平均步数和探索率，用于观察 Q-Learning 策略是否收敛。';
+    }
     if (this.algorithm === 'pca') {
       return '展示 PCA 主成分解释方差和重构误差，用于观察降维后保留了多少原始信息。';
     }
@@ -177,6 +183,9 @@ export class EvaluationMetricsPanelComponent {
   }
 
   get metricItems(): MetricItem[] {
+    if (this.algorithm === 'q_learning') {
+      return this.buildReinforcementMetrics();
+    }
     if (this.algorithm === 'pca') {
       return this.buildProjectionMetrics();
     }
@@ -187,6 +196,49 @@ export class EvaluationMetricsPanelComponent {
       return this.buildClassificationMetrics();
     }
     return this.buildRegressionMetrics();
+  }
+
+  private buildReinforcementMetrics(): MetricItem[] {
+    const avgReward = this.readNumber('avgReward');
+    const successRate = this.readNumber('successRate');
+    const stepsToGoal = this.readNumber('stepsToGoal');
+    const epsilon = this.readNumber('epsilon');
+    const items: MetricItem[] = [];
+
+    if (avgReward !== null) {
+      items.push({
+        label: 'Avg Reward',
+        value: this.formatNumber(avgReward),
+        hint: '最近若干回合的平均累计奖励，越高说明策略越优。',
+        tone: 'green'
+      });
+    }
+    if (successRate !== null) {
+      items.push({
+        label: 'Success Rate',
+        value: this.formatPercent(successRate),
+        hint: '最近若干回合中成功到达终点的比例。',
+        tone: 'blue'
+      });
+    }
+    if (stepsToGoal !== null) {
+      items.push({
+        label: 'Steps to Goal',
+        value: stepsToGoal > 0 ? this.formatNumber(stepsToGoal) : '-',
+        hint: '成功回合到达终点的平均步数，越少说明路径越短。',
+        tone: 'orange'
+      });
+    }
+    if (epsilon !== null) {
+      items.push({
+        label: 'Exploration ε',
+        value: this.formatNumber(epsilon),
+        hint: '当前探索率，随训练衰减，逐步从探索转向利用。',
+        tone: 'slate'
+      });
+    }
+
+    return [...items, ...this.buildExtraMetrics(['avgReward', 'successRate', 'stepsToGoal', 'epsilon'])];
   }
 
   private get isClassificationAlgorithm(): boolean {
