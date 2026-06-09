@@ -68,6 +68,11 @@ python-service/__pycache__/
 !.env.example
 
 # =========================
+# Local run artifacts
+# =========================
+proxy.local.json
+
+# =========================
 # Temporary Files
 # =========================
 tmp/

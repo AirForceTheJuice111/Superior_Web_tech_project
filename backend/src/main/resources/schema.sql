@@ -65,6 +65,16 @@ CREATE TABLE IF NOT EXISTS experiment (
     CONSTRAINT fk_experiment_user FOREIGN KEY (user_id) REFERENCES app_user(id)
 );
 
+CREATE TABLE IF NOT EXISTS dataset_data (
+    dataset_id BIGINT PRIMARY KEY,
+    columns_json CLOB NOT NULL,
+    rows_json CLOB NOT NULL,
+    feature_columns_json CLOB,
+    label_column VARCHAR(64),
+    created_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_dataset_data_meta FOREIGN KEY (dataset_id) REFERENCES dataset_meta(id)
+);
+
 CREATE TABLE IF NOT EXISTS experiment_case (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     code VARCHAR(64) NOT NULL UNIQUE,

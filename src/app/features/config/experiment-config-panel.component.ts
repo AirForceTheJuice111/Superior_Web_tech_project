@@ -3,6 +3,7 @@ import { Component, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleCha
 import { FormsModule } from '@angular/forms';
 
 import { AlgorithmMeta, CustomDatasetCell, CustomDatasetPayload, DatasetMeta, ExperimentConfig, LearningType, ParamSchema, ParamValue } from '../../core/models/platform.models';
+import { CatalogApiService } from '../../core/services/catalog-api.service';
 
 const learningTypeLabels: Record<string, string> = {
   supervised: '监督学习',
@@ -56,11 +57,11 @@ const MAX_CSV_ROWS = 300;
           </label>
         </div>
 
-        <div class="csv-panel">
+        <div class="csv-panel" *ngIf="supportsCsv">
           <div class="csv-header">
             <div>
               <h3>CSV 数据集</h3>
-              <p>上传小型 CSV 后，可用前两列数值特征做二维训练可视化。</p>
+              <p>上传小型 CSV 后，可用前两列数值特征做二维训练可视化，并可保存为可复用数据集。</p>
             </div>
             <span class="csv-badge" *ngIf="customDataset">{{ customDataset.sampleCount }} 行</span>
           </div>
@@ -110,6 +111,13 @@ const MAX_CSV_ROWS = 300;
                 <span>{{ column }}</span>
               </label>
             </div>
+          </div>
+
+          <div class="csv-save" *ngIf="customDataset">
+            <button class="primary" type="button" (click)="saveAsDataset()" [disabled]="savingDataset">
+              {{ savingDataset ? '保存中…' : '保存为数据集' }}
+            </button>
+            <span class="csv-message" [class.error]="!!datasetSaveError">{{ datasetSaveError || datasetSaveMessage }}</span>
           </div>
         </div>
 
@@ -342,6 +350,13 @@ export class ExperimentConfigPanelComponent implements OnChanges, OnDestroy {
   @Input() loading = false;
   @Input() selectedConfig: ExperimentConfig | null = null;
   @Output() readonly configChange = new EventEmitter<ExperimentConfig>();
+  @Output() readonly datasetSaved = new EventEmitter<void>();
+
+  constructor(private readonly catalogApi: CatalogApiService) {}
+
+  savingDataset = false;
+  datasetSaveMessage = '';
+  datasetSaveError = '';
 
   learningType: LearningType = 'supervised';
   selectedAlgorithmCode = '';
@@ -421,7 +436,11 @@ export class ExperimentConfigPanelComponent implements OnChanges, OnDestroy {
   }
 
   get requiresLabel(): boolean {
-    return !['kmeans', 'pca'].includes(this.selectedAlgorithmCode);
+    return !['kmeans', 'pca', 'q_learning'].includes(this.selectedAlgorithmCode);
+  }
+
+  get supportsCsv(): boolean {
+    return this.learningType !== 'reinforcement';
   }
 
   handleLearningTypeChange(value: LearningType): void {
@@ -443,6 +462,34 @@ export class ExperimentConfigPanelComponent implements OnChanges, OnDestroy {
   handleDatasetChange(value: string): void {
     this.dataset = value;
     this.emitConfig();
+  }
+
+  saveAsDataset(): void {
+    if (!this.customDataset || this.savingDataset) {
+      return;
+    }
+    // 用当前勾选的特征列/标签列同步到落库 payload
+    const payload: CustomDatasetPayload = {
+      ...this.customDataset,
+      featureColumns: this.csvFeatureColumns.filter((column) => !!column),
+      labelColumn: this.requiresLabel ? this.csvLabelColumn || null : null
+    };
+    this.savingDataset = true;
+    this.datasetSaveError = '';
+    this.datasetSaveMessage = '';
+    this.catalogApi.createDataset(payload).subscribe({
+      next: (dataset) => {
+        this.datasetSaveMessage = `已保存为数据集「${dataset.name}」，可在数据集列表中复用。`;
+        this.datasetSaved.emit();
+      },
+      error: (error: unknown) => {
+        this.datasetSaveError = error instanceof Error ? error.message : '数据集保存失败';
+        this.savingDataset = false;
+      },
+      complete: () => {
+        this.savingDataset = false;
+      }
+    });
   }
 
   handleCsvUpload(event: Event): void {

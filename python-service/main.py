@@ -9,13 +9,14 @@ from typing import Any
 import numpy as np
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
-from sklearn.datasets import make_blobs
+from sklearn.datasets import load_iris, make_blobs
 
 from stepwise_decision_tree import StepwiseDecisionTree
 from stepwise_kmeans import StepwiseKMeans
 from stepwise_linear_regression import StepwiseLinearRegression
 from stepwise_logistic_regression import StepwiseLogisticRegression
 from stepwise_pca import StepwisePCA
+from stepwise_q_learning import StepwiseQLearning
 from stepwise_random_forest import StepwiseRandomForest
 from stepwise_svm import StepwiseSVM
 
@@ -213,6 +214,9 @@ def build_training_bundle(
     if request.algorithm == "linear_regression":
         if has_custom_dataset(request):
             x_train, y_train, _ = build_custom_dataset(request, require_label=True, classification=False)
+        elif request.datasetId == "california":
+            x_train, y_train = build_california_dataset()
+            request.featureColumns = ["MedInc"]
         else:
             x_train, y_train = build_linear_regression_dataset(request)
         learning_rate = float(request.hyperParams.get("learningRate", 0.01))
@@ -229,7 +233,7 @@ def build_training_bundle(
                 max_classes=2,
             )
         else:
-            x_train, y_train, label_names = build_svm_dataset()
+            x_train, y_train, label_names = build_builtin_classification_dataset(request, max_classes=2)
         learning_rate = float(request.hyperParams.get("learningRate", 0.01))
         model = StepwiseSVM(learning_rate=learning_rate)
         model.initialize(x_train, y_train, label_names=label_names)
@@ -244,7 +248,7 @@ def build_training_bundle(
                 max_classes=2,
             )
         else:
-            x_train, y_train, label_names = build_svm_dataset()
+            x_train, y_train, label_names = build_builtin_classification_dataset(request, max_classes=2)
         learning_rate = float(request.hyperParams.get("learningRate", 0.05))
         model = StepwiseLogisticRegression(learning_rate=learning_rate)
         model.initialize(x_train, y_train, label_names=label_names)
@@ -258,7 +262,7 @@ def build_training_bundle(
                 classification=True,
             )
         else:
-            x_train, y_train, label_names = build_svm_dataset()
+            x_train, y_train, label_names = build_builtin_classification_dataset(request)
         model = StepwiseDecisionTree(
             max_depth=int(request.hyperParams.get("maxDepth", 4)),
             criterion=str(request.hyperParams.get("criterion", "gini")),
@@ -276,7 +280,7 @@ def build_training_bundle(
                 classification=True,
             )
         else:
-            x_train, y_train, label_names = build_svm_dataset()
+            x_train, y_train, label_names = build_builtin_classification_dataset(request)
         model = StepwiseRandomForest(
             n_estimators=int(request.hyperParams.get("nEstimators", 30)),
             trees_per_step=int(request.hyperParams.get("treesPerStep", 5)),
@@ -314,6 +318,19 @@ def build_training_bundle(
         model.initialize(x_train, labels=y_train, label_names=label_names)
         return x_train, y_train, label_names, model
 
+    if request.algorithm == "q_learning":
+        model = StepwiseQLearning(
+            grid_size=int(request.hyperParams.get("gridSize", 5)),
+            epsilon=float(request.hyperParams.get("epsilon", 0.2)),
+            alpha=float(request.hyperParams.get("learningRate", 0.1)),
+            gamma=float(request.hyperParams.get("gamma", 0.9)),
+            max_episode_steps=int(request.hyperParams.get("maxEpisodeSteps", 100)),
+            random_state=42,
+        )
+        model.initialize()
+        # 强化学习不依赖数据集，x_train 用占位数组保持 TrainingSession 契约
+        return np.zeros((1, 1), dtype=float), None, [], model
+
     raise HTTPException(status_code=400, detail=f"不支持的算法类型: {request.algorithm}")
 
 
@@ -326,6 +343,8 @@ def resolve_max_steps(request: InitTrainingRequest) -> int:
         return max(1, int(np.ceil(estimator_count / trees_per_step)))
     if request.algorithm == "pca":
         return 1
+    if request.algorithm == "q_learning":
+        return int(request.trainConfig.get("maxSteps", request.hyperParams.get("episodes", 200)))
     return int(request.trainConfig.get("maxSteps", request.hyperParams.get("epochs", request.hyperParams.get("maxIter", 100))))
 
 
@@ -381,6 +400,50 @@ def build_pca_dataset() -> tuple[np.ndarray, np.ndarray, list[str]]:
         random_state=42,
     )
     return x_train, labels.astype(int), ["Group A", "Group B", "Group C"]
+
+
+def build_iris_dataset(max_classes: int | None = None) -> tuple[np.ndarray, np.ndarray, list[str]]:
+    """真实鸢尾花数据集：取花瓣长/宽两个特征用于二维画布。"""
+    iris = load_iris()
+    x_all = np.asarray(iris.data, dtype=float)[:, [2, 3]]  # petal length, petal width
+    y_all = np.asarray(iris.target, dtype=int)
+    names = [str(name) for name in iris.target_names]
+
+    if max_classes is not None and max_classes < len(names):
+        keep = y_all < max_classes
+        x_all = x_all[keep]
+        y_all = y_all[keep]
+        names = names[:max_classes]
+    return x_all, y_all, names
+
+
+def build_california_dataset(samples: int = 120) -> tuple[np.ndarray, np.ndarray]:
+    """California 房价：取 MedInc（家庭收入中位数）单特征 vs 房价，子采样用于线性回归。"""
+    try:
+        from sklearn.datasets import fetch_california_housing
+
+        data = fetch_california_housing()
+        x_full = np.asarray(data.data, dtype=float)[:, [0]]  # MedInc
+        y_full = np.asarray(data.target, dtype=float)  # 单位：10 万美元
+        rng = np.random.default_rng(42)
+        size = min(samples, len(x_full))
+        indices = rng.choice(len(x_full), size=size, replace=False)
+        return x_full[indices], y_full[indices]
+    except Exception:
+        # 下载失败（如离线）回退到合成线性数据，保证演示不中断
+        x_axis = np.linspace(1.0, 8.0, samples)
+        x_train = x_axis.reshape(-1, 1)
+        y_train = 0.42 * x_axis + 0.5
+        return x_train, y_train
+
+
+def build_builtin_classification_dataset(
+    request: InitTrainingRequest,
+    max_classes: int | None = None,
+) -> tuple[np.ndarray, np.ndarray, list[str]]:
+    if request.datasetId == "iris":
+        return build_iris_dataset(max_classes=max_classes)
+    return build_svm_dataset()
 
 
 def has_custom_dataset(request: InitTrainingRequest) -> bool:
@@ -493,6 +556,8 @@ def build_status_response(session: TrainingSession) -> dict[str, Any]:
         return build_kmeans_response(session)
     if session.algorithm == "pca":
         return build_pca_response(session)
+    if session.algorithm == "q_learning":
+        return build_q_learning_response(session)
     raise HTTPException(status_code=400, detail=f"不支持的算法类型: {session.algorithm}")
 
 
@@ -675,6 +740,42 @@ def build_pca_response(session: TrainingSession) -> dict[str, Any]:
         },
         "predictions": build_pca_predictions(session, state["transformed"], state["labels"]),
         "visualization": build_pca_visualization(session, state["transformed"], state["labels"]),
+        "updatedAt": time.strftime("%Y-%m-%dT%H:%M:%S"),
+    }
+
+
+def build_q_learning_response(session: TrainingSession) -> dict[str, Any]:
+    state = session.model.get_state()
+    avg_reward = float(state["avgReward"])
+    return {
+        "sessionId": session.session_id,
+        "algorithm": session.algorithm,
+        "status": session.status,
+        "currentStep": state["step"],
+        "maxSteps": session.max_steps,
+        "progress": round(state["step"] / session.max_steps, 4) if session.max_steps else 0.0,
+        "loss": round(-avg_reward, 6),
+        "metrics": {
+            "avgReward": avg_reward,
+            "successRate": float(state["successRate"]),
+            "stepsToGoal": float(state["stepsToGoal"]),
+            "epsilon": float(state["epsilon"]),
+        },
+        "parameters": {
+            "gridSize": state["gridSize"],
+            "start": state["start"],
+            "goal": state["goal"],
+            "obstacles": state["obstacles"],
+            "values": state["values"],
+            "policy": state["policy"],
+            "qTable": state["qTable"],
+            "path": state["path"],
+            "epsilon": float(state["epsilon"]),
+            "gamma": session.model.gamma,
+            "alpha": session.model.alpha,
+        },
+        "predictions": [],
+        "visualization": {"points": [], "boundary": [], "centers": []},
         "updatedAt": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }
 
