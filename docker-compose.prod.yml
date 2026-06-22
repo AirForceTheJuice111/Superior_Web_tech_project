@@ -20,6 +20,9 @@ services:
     restart: always
     environment:
       APP_PYTHON_BASE_URL: "http://python:8000"
+      APP_AI_API_KEY: "${APP_AI_API_KEY:-}"
+      APP_AI_BASE_URL: "${APP_AI_BASE_URL:-https://api.deerapi.com/v1}"
+      APP_AI_MODEL: "${APP_AI_MODEL:-deepseek-v4-pro}"
     expose:
       - "8080"
     depends_on:

@@ -3,10 +3,8 @@
 }
 
 html {
-  background:
-    radial-gradient(circle at top left, rgba(59, 130, 246, 0.16), transparent 28%),
-    radial-gradient(circle at top right, rgba(16, 185, 129, 0.12), transparent 24%),
-    linear-gradient(180deg, #eef4ff 0%, #f7faff 36%, #f6f8fc 100%);
+  /* 深空底色,作为星云背景层的兜底,避免加载瞬间的白屏闪烁 */
+  background: #05060f;
 }
 
 html,
@@ -14,7 +12,6 @@ body {
   margin: 0;
   min-height: 100%;
   font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-  background: transparent;
   color: #1f2937;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -22,6 +19,7 @@ body {
 
 body {
   min-height: 100vh;
+  background: transparent;
 }
 
 button,

@@ -1,5 +1,6 @@
 package com.example.mlplatform;
 
+import com.example.mlplatform.config.AiProperties;
 import com.example.mlplatform.config.AppCorsProperties;
 import com.example.mlplatform.config.PythonServiceProperties;
 import org.springframework.boot.SpringApplication;
@@ -10,7 +11,8 @@ import org.springframework.scheduling.annotation.EnableAsync;
 @EnableAsync
 @EnableConfigurationProperties({
         AppCorsProperties.class,
-        PythonServiceProperties.class
+        PythonServiceProperties.class,
+        AiProperties.class
 })
 @SpringBootApplication
 public class MlPlatformApplication {

@@ -5,6 +5,7 @@ import { Subscription } from 'rxjs';
 
 import { ExperimentConfig, TrainingSessionSummary, TrainingStatusResponse, TrainingViewMode } from '../../core/models/platform.models';
 import { TrainingApiService } from '../../core/services/training-api.service';
+import { ExperimentContextService } from '../../core/services/experiment-context.service';
 import { GridWorldVisualizerComponent } from '../../shared/components/gridworld-visualizer.component';
 import { MetricTrendChartComponent } from '../../shared/components/metric-trend-chart.component';
 import { TwoDimensionalVisualizerComponent } from '../../shared/components/two-dimensional-visualizer.component';
@@ -198,7 +199,10 @@ export class TrainingControlPanelComponent implements OnDestroy {
   private timerId: ReturnType<typeof setInterval> | null = null;
   private readonly subscriptions = new Subscription();
 
-  constructor(private readonly trainingApi: TrainingApiService) {}
+  constructor(
+    private readonly trainingApi: TrainingApiService,
+    private readonly experimentContext: ExperimentContextService
+  ) {}
 
   get viewMode(): TrainingViewMode {
     if (this.config?.algorithm === 'q_learning') {
@@ -348,6 +352,14 @@ export class TrainingControlPanelComponent implements OnDestroy {
     } else if (typeof successRate === 'number') {
       this.accuracyHistory = this.appendMetric(this.accuracyHistory, payload.currentStep, successRate);
     }
+
+    this.experimentContext.patch({
+      trainingStatus: payload.status,
+      currentStep: payload.currentStep,
+      maxSteps: this.maxSteps,
+      loss: payload.loss,
+      metrics: payload.metrics
+    });
 
     this.emitSessionChange();
 

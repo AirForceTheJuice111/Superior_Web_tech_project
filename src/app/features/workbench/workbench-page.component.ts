@@ -5,6 +5,7 @@ import { Subscription, forkJoin } from 'rxjs';
 
 import { AlgorithmMeta, CustomDatasetPayload, DatasetMeta, ExperimentCase, ExperimentConfig, ExperimentRecord, LearningType, ParamValue, TrainingSessionSummary, UserProfile } from '../../core/models/platform.models';
 import { CatalogApiService } from '../../core/services/catalog-api.service';
+import { ExperimentContextService } from '../../core/services/experiment-context.service';
 import { ExperimentCaseApiService } from '../../core/services/experiment-case-api.service';
 import { ExperimentApiService } from '../../core/services/experiment-api.service';
 import { LoginPanelComponent } from '../auth/login-panel.component';
@@ -300,7 +301,8 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
   constructor(
     private readonly catalogApi: CatalogApiService,
     private readonly experimentCaseApi: ExperimentCaseApiService,
-    private readonly experimentApi: ExperimentApiService
+    private readonly experimentApi: ExperimentApiService,
+    private readonly experimentContext: ExperimentContextService
   ) {}
 
   get canSaveExperiment(): boolean {
@@ -328,10 +330,21 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
     if (!this.experimentName.trim()) {
       this.experimentName = this.buildExperimentName(config);
     }
+    this.experimentContext.patch({
+      learningType: config.learningType,
+      algorithm: config.algorithm,
+      dataset: config.dataset,
+      params: config.params,
+      hasCustomDataset: !!config.customDataset
+    });
   }
 
   handleSessionChange(session: TrainingSessionSummary): void {
     this.latestSessionId = session.sessionId;
+    this.experimentContext.patch({
+      latestSessionId: session.sessionId,
+      trainingStatus: session.status
+    });
     if (session.status === 'completed') {
       this.saveMessage = `训练已完成，可将 Session ${session.sessionId} 保存为实验记录。`;
     }

@@ -13,3 +13,5 @@ scripts
 report.md
 *.md
 .vscode
+.env
+.env.*
