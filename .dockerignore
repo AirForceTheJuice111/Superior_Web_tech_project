@@ -1,0 +1,15 @@
+node_modules
+dist
+.angular
+.git
+backend
+python-service
+logs
+run-logs
+temp
+data
+scripts
+.deploy
+report.md
+*.md
+.vscode
