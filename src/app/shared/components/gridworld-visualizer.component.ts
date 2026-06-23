@@ -57,13 +57,14 @@ const ARROWS = ['↑', '↓', '←', '→'];
     </section>
   `,
   styles: [`
-    .card { background: rgba(255,255,255,0.94); border-radius: 24px; padding: 24px; box-shadow: 0 24px 48px rgba(15, 23, 42, 0.08); border: 1px solid rgba(255,255,255,0.8); }
+    :host { display: block; width: 100%; min-width: 0; }
+    .card { width: 100%; min-width: 0; background: rgba(255,255,255,0.94); border-radius: 20px; padding: 22px; box-shadow: 0 24px 48px rgba(15, 23, 42, 0.08); border: 1px solid rgba(255,255,255,0.8); }
     .card-header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 16px; }
     h3 { margin: 0 0 8px; font-size: 22px; }
     p { margin: 0; color: #64748b; line-height: 1.7; }
     .badge { padding: 8px 14px; border-radius: 999px; background: linear-gradient(135deg, #f0fdf4, #dcfce7); color: #16a34a; font-size: 12px; font-weight: 800; }
-    .grid-shell { border-radius: 20px; padding: 16px; background: linear-gradient(180deg, #f8fbff, #ffffff); border: 1px solid #e2e8f0; }
-    .grid { display: grid; gap: 6px; max-width: 460px; margin: 0 auto; }
+    .grid-shell { min-width: 0; border-radius: 20px; padding: 16px; background: linear-gradient(180deg, #f8fbff, #ffffff); border: 1px solid #e2e8f0; }
+    .grid { display: grid; gap: 6px; width: min(100%, 680px); margin: 0 auto; }
     .cell {
       position: relative; aspect-ratio: 1 / 1; border-radius: 10px; border: 1px solid #e2e8f0;
       display: flex; flex-direction: column; align-items: center; justify-content: center;

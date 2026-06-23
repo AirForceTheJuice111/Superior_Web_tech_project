@@ -1,5 +1,5 @@
-﻿import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { Component, HostListener, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Subscription, forkJoin } from 'rxjs';
 
@@ -15,6 +15,49 @@ import { ExperimentConfigPanelComponent } from '../config/experiment-config-pane
 import { ExperimentHistoryPanelComponent } from '../history/experiment-history-panel.component';
 import { TrainingControlPanelComponent } from '../training/training-control-panel.component';
 
+type PageKey = 'home' | 'auth' | 'dashboard' | 'paths' | 'theory' | 'lab' | 'analysis' | 'datasets' | 'quiz' | 'profile';
+type AuthMode = 'login' | 'register';
+
+interface NavItem {
+  key: PageKey;
+  label: string;
+  eyebrow: string;
+  icon: string;
+}
+
+interface PageMeta {
+  eyebrow: string;
+  title: string;
+  description: string;
+}
+
+interface PathNode {
+  id: string;
+  title: string;
+  description: string;
+  prerequisites: string[];
+  experiment: string;
+  practice: string;
+}
+
+interface PathGroup {
+  title: string;
+  nodes: PathNode[];
+}
+
+interface PracticeItem {
+  title: string;
+  level: string;
+  description: string;
+  tags: string[];
+}
+
+const learningTypeLabels: Record<string, string> = {
+  supervised: '监督学习',
+  unsupervised: '无监督学习',
+  reinforcement: '强化学习'
+};
+
 @Component({
   selector: 'app-workbench-page',
   standalone: true,
@@ -29,259 +72,2144 @@ import { TrainingControlPanelComponent } from '../training/training-control-pane
     TrainingControlPanelComponent
   ],
   template: `
-    <main class="page">
-      <section class="hero">
-        <div class="hero-copy">
-          <span class="eyebrow">课程实验工作台</span>
-          <h1>机器学习可视化学习平台</h1>
-          <p>支持实验配置、训练控制、图形化展示与实验历史管理，适用于课程演示、算法实验和小组协作开发。</p>
-          <div class="hero-points">
-            <span>动态参数配置</span>
-            <span>单步训练演示</span>
-            <span>训练曲线可视化</span>
+    <ng-container *ngIf="activePage === 'home'; else nonPublicPage">
+      <main class="public-page">
+        <section class="landing-hero">
+          <nav class="landing-nav" aria-label="公开首页导航">
+            <button class="landing-brand" type="button" (click)="setPage('home')">
+              <span>ML</span>
+              <strong>机器学习可视化学习平台</strong>
+            </button>
+            <button class="ghost-action" type="button" (click)="setPage('auth')">登录 / 注册</button>
+          </nav>
+
+          <div class="landing-copy">
+            <span class="eyebrow">Interactive ML Learning</span>
+            <h1>交互式机器学习可视化学习平台</h1>
+            <p>通过可视化实验理解监督学习、无监督学习、强化学习，让抽象算法变成可观察、可调整、可复盘的学习过程。</p>
+            <button class="primary-action large" type="button" (click)="beginLearning()">开始学习</button>
           </div>
-        </div>
-        <div class="hero-badges">
-          <span>Angular 前端</span>
-          <span>Spring Boot + MyBatis</span>
-          <span>Python / FastAPI</span>
-        </div>
-      </section>
-
-      <section class="overview-grid">
-        <article class="overview-card">
-          <strong>{{ algorithms.length || 0 }}</strong>
-          <span>已接入算法</span>
-        </article>
-        <article class="overview-card">
-          <strong>{{ datasets.length || 0 }}</strong>
-          <span>可用数据集</span>
-        </article>
-        <article class="overview-card">
-          <strong>{{ experimentHistory.length || 0 }}</strong>
-          <span>实验记录</span>
-        </article>
-        <article class="overview-card">
-          <strong>{{ experimentCases.length || 0 }}</strong>
-          <span>预设案例</span>
-        </article>
-        <article class="overview-card">
-          <strong>{{ latestSessionId ? '在线' : '待启动' }}</strong>
-          <span>训练会话</span>
-        </article>
-      </section>
-
-      <app-login-panel
-        [user]="currentUser"
-        (loginSuccess)="handleLogin($event)"
-        (logout)="handleLogout()"
-      ></app-login-panel>
-
-      <app-experiment-case-library-panel
-        [cases]="experimentCases"
-        [loading]="caseLoading"
-        (loadRequested)="applyCase($event)"
-      ></app-experiment-case-library-panel>
-
-      <section class="workspace-grid">
-        <app-experiment-config-panel
-          [algorithms]="algorithms"
-          [datasets]="datasets"
-          [loading]="catalogLoading"
-          [selectedConfig]="activeConfig"
-          (configChange)="handleConfigChange($event)"
-          (datasetSaved)="reloadDatasets()"
-        ></app-experiment-config-panel>
-
-        <section class="card side-card">
-          <div class="card-header">
-            <div>
-              <h2>实验保存</h2>
-              <p>当前配置与最近一次训练 Session 一起写入数据库。</p>
-            </div>
-          </div>
-
-          <label class="field">
-            <span>实验名称</span>
-            <input type="text" [(ngModel)]="experimentName" placeholder="例如：Iris SVM 分类演示" />
-          </label>
-
-          <div class="summary-grid">
-            <div>
-              <strong>已登录用户</strong>
-              <span>{{ currentUser?.displayName || '未登录' }}</span>
-            </div>
-            <div>
-              <strong>最近 Session</strong>
-              <span>{{ latestSessionId || '暂无' }}</span>
-            </div>
-          </div>
-
-          <button class="primary" type="button" (click)="saveExperiment()" [disabled]="saveLoading || !canSaveExperiment">
-            {{ saveLoading ? '保存中...' : '保存实验' }}
-          </button>
-          <p class="hint">{{ saveMessage }}</p>
         </section>
+
+        <section class="public-section">
+          <div class="section-heading">
+            <span>Why this platform</span>
+            <h2>平台介绍</h2>
+            <p>这个平台面向课程实验和教学演示：学生可以沿着知识路径学习算法，再进入实验室修改参数、观察曲线与可视化结果，最后保存实验记录用于复盘。</p>
+          </div>
+
+          <div class="public-feature-grid">
+            <article>
+              <span>01</span>
+              <h3>可视化理解算法</h3>
+              <p>用散点图、决策边界、聚类中心、训练曲线帮助理解模型如何学习。</p>
+            </article>
+            <article>
+              <span>02</span>
+              <h3>实验驱动学习</h3>
+              <p>围绕算法、数据集和参数配置组织训练流程，适合课堂演示和课后练习。</p>
+            </article>
+            <article>
+              <span>03</span>
+              <h3>记录与复盘</h3>
+              <p>登录后可以保存实验，回看历史配置，并比较不同模型的训练表现。</p>
+            </article>
+          </div>
+        </section>
+
+        <footer class="public-footer">
+          <button type="button" (click)="setPage('home')">关于平台</button>
+          <span>联系方式：course&#64;example.com</span>
+          <span>课程说明：高级 Web 技术课程项目</span>
+        </footer>
+      </main>
+    </ng-container>
+
+    <ng-template #nonPublicPage>
+      <ng-container *ngIf="activePage === 'auth'; else appShell">
+        <main class="auth-page">
+          <button class="auth-brand" type="button" (click)="setPage('home')">
+            <span>ML</span>
+            <strong>机器学习可视化学习平台</strong>
+          </button>
+
+          <section class="auth-shell">
+            <div class="auth-intro">
+              <span class="eyebrow">Account</span>
+              <h1>开始你的机器学习实验旅程</h1>
+              <p>登录后进入学习仪表盘，继续课程路径、算法实验室和实验记录复盘。</p>
+            </div>
+
+            <div class="auth-card">
+              <div class="auth-tabs" role="tablist" aria-label="登录注册切换">
+                <button type="button" [class.active]="authMode === 'login'" (click)="authMode = 'login'">登录</button>
+                <button type="button" [class.active]="authMode === 'register'" (click)="authMode = 'register'">注册</button>
+              </div>
+
+              <ng-container *ngIf="authMode === 'login'; else registerPanel">
+                <app-login-panel
+                  [user]="currentUser"
+                  (loginSuccess)="handleLogin($event)"
+                  (logout)="handleLogout()"
+                ></app-login-panel>
+                <div class="auth-links">
+                  <button type="button" (click)="forgotMessage = '当前项目暂未接入找回密码接口，请使用演示账号 student / 123456。'">忘记密码</button>
+                  <button type="button" (click)="authMode = 'register'">跳转注册</button>
+                </div>
+                <p class="hint" *ngIf="forgotMessage">{{ forgotMessage }}</p>
+              </ng-container>
+
+              <ng-template #registerPanel>
+                <form class="register-form" (ngSubmit)="handleRegister()">
+                  <label>
+                    <span>用户名</span>
+                    <input type="text" name="registerUsername" [(ngModel)]="registerUsername" placeholder="请输入用户名" />
+                  </label>
+                  <label>
+                    <span>邮箱</span>
+                    <input type="email" name="registerEmail" [(ngModel)]="registerEmail" placeholder="name&#64;example.com" />
+                  </label>
+                  <label>
+                    <span>密码</span>
+                    <input type="password" name="registerPassword" [(ngModel)]="registerPassword" placeholder="请输入密码" />
+                  </label>
+                  <label>
+                    <span>确认密码</span>
+                    <input type="password" name="registerPasswordConfirm" [(ngModel)]="registerPasswordConfirm" placeholder="再次输入密码" />
+                  </label>
+                  <button class="primary-action full" type="submit">注册</button>
+                </form>
+                <div class="auth-links">
+                  <button type="button" (click)="authMode = 'login'">已有账号？返回登录</button>
+                </div>
+                <p class="hint">{{ registerMessage || '注册界面已展示；后端注册接口暂未接入，当前可使用演示账号登录。' }}</p>
+              </ng-template>
+            </div>
+          </section>
+        </main>
+      </ng-container>
+    </ng-template>
+
+    <ng-template #appShell>
+      <div class="learning-shell" [class.sidebar-collapsed]="sidebarCollapsed" [class.lab-shell]="activePage === 'lab'">
+        <aside class="sidebar" [class.collapsed]="sidebarCollapsed">
+          <div class="sidebar-top">
+            <button
+              class="sidebar-brand"
+              type="button"
+              (click)="setPage('dashboard')"
+              [attr.title]="sidebarCollapsed ? '学习中心' : null"
+              [attr.aria-label]="sidebarCollapsed ? '打开学习中心' : '学习中心'"
+            >
+              <span class="brand-mark">ML</span>
+              <strong>学习中心</strong>
+            </button>
+            <button
+              class="sidebar-toggle"
+              type="button"
+              (click)="toggleSidebar()"
+              [attr.aria-label]="sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'"
+              [attr.title]="sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'"
+            >
+              <span aria-hidden="true">{{ sidebarCollapsed ? '›' : '‹' }}</span>
+            </button>
+          </div>
+
+          <nav class="sidebar-nav" aria-label="学习平台侧边栏">
+            <button
+              *ngFor="let item of appNavItems"
+              type="button"
+              [class.active]="activePage === item.key"
+              [attr.title]="sidebarCollapsed ? item.label : null"
+              [attr.aria-label]="item.label"
+              (click)="setPage(item.key)"
+            >
+              <span class="nav-icon" aria-hidden="true">{{ item.icon }}</span>
+              <span class="nav-copy">
+                <span>{{ item.label }}</span>
+                <small>{{ item.eyebrow }}</small>
+              </span>
+            </button>
+          </nav>
+
+          <div class="sidebar-user" [attr.title]="currentUser?.displayName || '访客用户'">
+            <span class="user-avatar" aria-hidden="true">{{ userInitial }}</span>
+            <div class="sidebar-user-copy">
+              <strong>{{ currentUser?.displayName || '访客用户' }}</strong>
+              <span>{{ currentUser ? '已登录，可保存实验' : '登录后解锁实验保存' }}</span>
+            </div>
+            <button type="button" (click)="currentUser ? handleLogout() : setPage('auth')">
+              <span class="expanded-label">{{ currentUser ? '退出登录' : '去登录' }}</span>
+              <span class="collapsed-label" aria-hidden="true">{{ currentUser ? '退' : '入' }}</span>
+            </button>
+          </div>
+        </aside>
+
+        <main class="app-main">
+          <header class="app-header">
+            <div>
+              <span class="eyebrow">{{ currentPageMeta.eyebrow }}</span>
+              <h1>{{ currentPageMeta.title }}</h1>
+              <p>{{ currentPageMeta.description }}</p>
+            </div>
+            <button class="ghost-action" type="button" (click)="setPage('home')">返回公开首页</button>
+          </header>
+
+          <ng-container [ngSwitch]="activePage">
+            <section *ngSwitchCase="'dashboard'" class="dashboard-page">
+              <section class="dashboard-welcome">
+                <div>
+                  <span>欢迎回来，{{ currentUser?.displayName || '学习者' }}</span>
+                  <h2>今日推荐学习任务</h2>
+                  <p>{{ todayTask }}</p>
+                </div>
+                <button class="primary-action" type="button" (click)="setPage('lab')">继续实验</button>
+              </section>
+
+              <div class="dashboard-layout">
+                <div class="dashboard-main">
+                  <section class="progress-grid">
+                    <article>
+                      <strong>{{ completedCourseCount }}</strong>
+                      <span>已完成课程数</span>
+                    </article>
+                    <article>
+                      <strong>{{ completedExperimentCount }}</strong>
+                      <span>已完成实验数</span>
+                    </article>
+                    <article>
+                      <strong>{{ practiceAccuracy }}</strong>
+                      <span>练习正确率</span>
+                    </article>
+                    <article>
+                      <strong>{{ currentLevel }}</strong>
+                      <span>当前学习等级</span>
+                    </article>
+                  </section>
+
+                  <section class="content-card">
+                    <div class="section-heading compact">
+                      <span>Continue</span>
+                      <h2>继续学习</h2>
+                    </div>
+                    <div class="continue-grid">
+                      <article>
+                        <small>上次学习的算法</small>
+                        <strong>{{ selectedAlgorithmName }}</strong>
+                        <p>{{ selectedAlgorithmName === '未选择' ? '进入算法实验室选择一个算法开始训练。' : '可以继续调整参数，观察训练曲线变化。' }}</p>
+                      </article>
+                      <article>
+                        <small>上次运行的实验</small>
+                        <strong>{{ latestSessionId || '暂无训练 Session' }}</strong>
+                        <p>{{ latestSessionId ? '可前往结果分析页复盘模型表现。' : '初始化训练后会在这里显示最近 Session。' }}</p>
+                      </article>
+                      <article>
+                        <small>推荐下一节内容</small>
+                        <strong>{{ recommendedNextLesson }}</strong>
+                        <p>结合当前进度，建议先完成一个可视化实验再做练习。</p>
+                      </article>
+                    </div>
+                  </section>
+
+                  <section class="content-card">
+                    <div class="section-heading compact">
+                      <span>Records</span>
+                      <h2>最近实验记录</h2>
+                    </div>
+                    <div class="record-table" *ngIf="experimentHistory.length > 0; else emptyRecords">
+                      <div class="record-row header">
+                        <span>算法</span>
+                        <span>数据集</span>
+                        <span>参数</span>
+                        <span>准确率</span>
+                        <span>时间</span>
+                        <span>操作</span>
+                      </div>
+                      <div class="record-row" *ngFor="let item of recentExperiments">
+                        <strong>{{ item.algorithmCode }}</strong>
+                        <span>{{ item.datasetCode }}</span>
+                        <span>{{ formatRecordParams(item) }}</span>
+                        <span>--</span>
+                        <span>{{ item.createdAt | date:'MM-dd HH:mm' }}</span>
+                        <button type="button" (click)="applyHistory(item)">查看详情</button>
+                      </div>
+                    </div>
+                    <ng-template #emptyRecords>
+                      <p class="empty-state">暂无保存的实验。完成训练后，可在算法实验室保存到实验记录。</p>
+                    </ng-template>
+                  </section>
+                </div>
+
+                <aside class="dashboard-side">
+                  <section class="content-card">
+                    <h3>学习日历</h3>
+                    <div class="calendar-grid">
+                      <span *ngFor="let day of calendarDays" [class.active]="day.active">{{ day.label }}</span>
+                    </div>
+                  </section>
+                  <section class="content-card">
+                    <h3>成就徽章</h3>
+                    <div class="badge-list">
+                      <span *ngFor="let badge of achievementBadges">{{ badge }}</span>
+                    </div>
+                  </section>
+                  <section class="content-card">
+                    <h3>薄弱知识点提醒</h3>
+                    <ul class="weak-list">
+                      <li *ngFor="let point of weakPoints">{{ point }}</li>
+                    </ul>
+                  </section>
+                </aside>
+              </div>
+            </section>
+
+            <section *ngSwitchCase="'paths'" class="paths-page">
+              <section class="path-header">
+                <span class="eyebrow">Knowledge Map</span>
+                <h2>机器学习入门路线</h2>
+                <p>按知识依赖组织路线：先理解数据、特征、损失函数与评估，再进入监督学习、无监督学习和强化学习。</p>
+              </section>
+
+              <div class="path-layout">
+                <section class="path-tree-card">
+                  <div class="path-group" *ngFor="let group of pathGroups">
+                    <h3>{{ group.title }}</h3>
+                    <div class="tree-list">
+                      <button
+                        *ngFor="let node of group.nodes"
+                        type="button"
+                        [class.active]="selectedPathNode.id === node.id"
+                        (click)="selectPathNode(node)"
+                      >
+                        {{ node.title }}
+                      </button>
+                    </div>
+                  </div>
+                </section>
+
+                <aside class="path-detail-card">
+                  <span class="eyebrow">当前节点</span>
+                  <h2>{{ selectedPathNode.title }}</h2>
+                  <p>{{ selectedPathNode.description }}</p>
+
+                  <div class="detail-block">
+                    <strong>学习前置知识</strong>
+                    <ul>
+                      <li *ngFor="let item of selectedPathNode.prerequisites">{{ item }}</li>
+                    </ul>
+                  </div>
+                  <div class="detail-block">
+                    <strong>推荐实验</strong>
+                    <p>{{ selectedPathNode.experiment }}</p>
+                  </div>
+                  <div class="detail-block">
+                    <strong>相关练习</strong>
+                    <p>{{ selectedPathNode.practice }}</p>
+                  </div>
+                  <div class="path-actions">
+                    <button class="primary-action" type="button" (click)="setPage('lab')">进入推荐实验</button>
+                    <button class="ghost-action" type="button" (click)="setPage('quiz')">查看相关练习</button>
+                  </div>
+                </aside>
+              </div>
+
+              <app-experiment-case-library-panel
+                [cases]="experimentCases"
+                [loading]="caseLoading"
+                (loadRequested)="applyCaseAndOpenLab($event)"
+              ></app-experiment-case-library-panel>
+            </section>
+
+            <section *ngSwitchCase="'theory'" class="theory-page">
+              <section class="content-card">
+                <div class="section-heading">
+                  <span>Theory</span>
+                  <h2>算法教学与理论速览</h2>
+                  <p>把算法按学习类型组织成卡片，先看任务目标、适用场景和参数，再进入实验室调参。</p>
+                </div>
+
+                <p class="empty-state" *ngIf="catalogLoading">正在加载算法元数据...</p>
+                <div class="algorithm-group" *ngFor="let group of algorithmGroups">
+                  <div class="group-title">
+                    <span>{{ group.label }}</span>
+                    <small>{{ group.items.length }} 个算法</small>
+                  </div>
+                  <div class="algorithm-grid">
+                    <article class="algorithm-card" *ngFor="let algorithm of group.items">
+                      <span>{{ algorithm.code }}</span>
+                      <h3>{{ algorithm.name }}</h3>
+                      <p>{{ algorithm.description }}</p>
+                      <div class="param-row">
+                        <small>{{ algorithm.paramsSchema.length }} 个可调参数</small>
+                        <button type="button" (click)="setPage('lab')">去实验</button>
+                      </div>
+                    </article>
+                  </div>
+                </div>
+              </section>
+            </section>
+
+            <section *ngSwitchCase="'lab'" class="lab-page">
+              <section class="lab-top">
+                <label>
+                  <span>实验名称</span>
+                  <input type="text" [(ngModel)]="experimentName" placeholder="例如：Iris SVM 分类演示" />
+                </label>
+                <div>
+                  <span>算法类型</span>
+                  <strong>{{ selectedLearningTypeLabel }}</strong>
+                </div>
+                <button class="primary-action" type="button" (click)="saveExperiment()" [disabled]="saveLoading || !canSaveExperiment">
+                  {{ saveLoading ? '保存中...' : '保存实验' }}
+                </button>
+              </section>
+
+              <section class="lab-grid">
+                <aside class="lab-config">
+                  <div class="lab-panel-title">
+                    <span>左侧配置区</span>
+                    <h2>算法、数据集与参数设置</h2>
+                  </div>
+                  <app-experiment-config-panel
+                    [algorithms]="algorithms"
+                    [datasets]="datasets"
+                    [loading]="catalogLoading"
+                    [selectedConfig]="activeConfig"
+                    (configChange)="handleConfigChange($event)"
+                    (datasetSaved)="reloadDatasets()"
+                  ></app-experiment-config-panel>
+                </aside>
+
+                <section class="lab-visual">
+                  <div class="lab-panel-title">
+                    <span>中间可视化区</span>
+                    <h2>训练过程、分布图与曲线</h2>
+                  </div>
+                  <app-training-control-panel
+                    [config]="activeConfig"
+                    (sessionChange)="handleSessionChange($event)"
+                  ></app-training-control-panel>
+                </section>
+
+                <aside class="lab-explain">
+                  <div class="lab-panel-title">
+                    <span>右侧解释区</span>
+                    <h2>参数含义与系统提示</h2>
+                  </div>
+                  <section class="content-card">
+                    <h3>当前参数含义</h3>
+                    <p>{{ currentParameterExplanation }}</p>
+                  </section>
+                  <section class="content-card">
+                    <h3>训练过程解释</h3>
+                    <p>初始化后，系统会按步调用训练接口，更新模型参数、可视化数据、Loss 曲线和指标面板。</p>
+                  </section>
+                  <section class="content-card">
+                    <h3>模型输出解释</h3>
+                    <p>{{ currentOutputExplanation }}</p>
+                  </section>
+                  <section class="content-card tip-card">
+                    <h3>系统提示</h3>
+                    <ul>
+                      <li>学习率过大可能导致损失震荡。</li>
+                      <li>K 值过小可能导致聚类过粗。</li>
+                      <li>训练步数过少时，指标可能尚未稳定。</li>
+                    </ul>
+                  </section>
+                </aside>
+              </section>
+
+              <section class="lab-results">
+                <article>
+                  <strong>{{ latestSessionId || '暂无' }}</strong>
+                  <span>Session</span>
+                </article>
+                <article>
+                  <strong>{{ selectedAlgorithmName }}</strong>
+                  <span>当前算法</span>
+                </article>
+                <article>
+                  <strong>{{ selectedDatasetName }}</strong>
+                  <span>当前数据集</span>
+                </article>
+                <article>
+                  <strong>{{ saveMessage }}</strong>
+                  <span>实验保存状态</span>
+                </article>
+              </section>
+            </section>
+
+            <section *ngSwitchCase="'analysis'" class="analysis-page">
+              <div class="split-layout">
+                <section class="content-card">
+                  <span class="eyebrow">Records</span>
+                  <h2>我的实验记录</h2>
+                  <p>这里集中展示历史实验与模型对比。点击历史记录可以回填配置并回到算法实验室。</p>
+                  <div class="result-summary">
+                    <div>
+                      <strong>{{ latestSessionId || '暂无 Session' }}</strong>
+                      <span>最近训练会话</span>
+                    </div>
+                    <div>
+                      <strong>{{ selectedAlgorithmName }}</strong>
+                      <span>当前分析算法</span>
+                    </div>
+                  </div>
+                </section>
+
+                <app-model-comparison-panel
+                  [config]="activeConfig"
+                  [algorithms]="algorithms"
+                ></app-model-comparison-panel>
+              </div>
+
+              <app-experiment-history-panel
+                [experiments]="experimentHistory"
+                [loading]="historyLoading"
+                (refreshRequested)="loadHistory()"
+                (loadRequested)="applyHistory($event)"
+              ></app-experiment-history-panel>
+            </section>
+
+            <section *ngSwitchCase="'datasets'" class="dataset-page">
+              <section class="content-card">
+                <div class="section-heading">
+                  <span>Datasets</span>
+                  <h2>数据集广场</h2>
+                  <p>集中展示平台内置和用户保存的数据集。上传 CSV 的入口保留在算法实验室，保证数据处理和训练配置连在一起。</p>
+                </div>
+
+                <p class="empty-state" *ngIf="catalogLoading">正在加载数据集...</p>
+                <div class="dataset-grid" *ngIf="datasets.length > 0">
+                  <article class="dataset-card" *ngFor="let dataset of datasets">
+                    <div>
+                      <span>{{ labelFor(dataset.taskType) }}</span>
+                      <h3>{{ dataset.name }}</h3>
+                      <p>{{ dataset.description }}</p>
+                    </div>
+                    <dl>
+                      <div>
+                        <dt>样本</dt>
+                        <dd>{{ dataset.sampleCount }}</dd>
+                      </div>
+                      <div>
+                        <dt>特征</dt>
+                        <dd>{{ dataset.featureCount }}</dd>
+                      </div>
+                      <div>
+                        <dt>来源</dt>
+                        <dd>{{ dataset.sourceType }}</dd>
+                      </div>
+                    </dl>
+                  </article>
+                </div>
+              </section>
+            </section>
+
+            <section *ngSwitchCase="'quiz'" class="quiz-page">
+              <section class="quiz-grid">
+                <article class="quiz-card" *ngFor="let item of practiceItems">
+                  <span>{{ item.level }}</span>
+                  <h3>{{ item.title }}</h3>
+                  <p>{{ item.description }}</p>
+                  <div class="tag-row">
+                    <small *ngFor="let tag of item.tags">{{ tag }}</small>
+                  </div>
+                </article>
+              </section>
+            </section>
+
+            <section *ngSwitchCase="'profile'" class="profile-page">
+              <section class="content-card">
+                <span class="eyebrow">Profile</span>
+                <h2>个人中心</h2>
+                <p>当前项目已实现登录态展示、实验保存和历史记录；更完整的头像、邮箱修改、密码修改可作为后续扩展。</p>
+                <div class="profile-grid">
+                  <div>
+                    <strong>{{ currentUser?.displayName || '未登录' }}</strong>
+                    <span>显示名称</span>
+                  </div>
+                  <div>
+                    <strong>{{ currentUser?.username || '访客' }}</strong>
+                    <span>用户名</span>
+                  </div>
+                  <div>
+                    <strong>{{ currentUser?.role || 'guest' }}</strong>
+                    <span>角色</span>
+                  </div>
+                </div>
+              </section>
+
+              <ng-container *ngTemplateOutlet="saveExperimentCard"></ng-container>
+            </section>
+          </ng-container>
+        </main>
+      </div>
+    </ng-template>
+
+    <ng-template #saveExperimentCard>
+      <section class="content-card save-card">
+        <span class="eyebrow">Experiment</span>
+        <h2>保存实验</h2>
+        <p>当前配置与最近一次训练 Session 一起写入数据库，便于复盘和课堂演示。</p>
+
+        <label class="field">
+          <span>实验名称</span>
+          <input type="text" [(ngModel)]="experimentName" placeholder="例如：Iris SVM 分类演示" />
+        </label>
+
+        <div class="save-summary">
+          <div>
+            <strong>已登录用户</strong>
+            <span>{{ currentUser?.displayName || '未登录' }}</span>
+          </div>
+          <div>
+            <strong>最近 Session</strong>
+            <span>{{ latestSessionId || '暂无' }}</span>
+          </div>
+        </div>
+
+        <button class="primary-action full" type="button" (click)="saveExperiment()" [disabled]="saveLoading || !canSaveExperiment">
+          {{ saveLoading ? '保存中...' : '保存实验' }}
+        </button>
+        <p class="hint">{{ saveMessage }}</p>
       </section>
-
-      <app-model-comparison-panel
-        [config]="activeConfig"
-        [algorithms]="algorithms"
-      ></app-model-comparison-panel>
-
-      <app-experiment-history-panel
-        [experiments]="experimentHistory"
-        [loading]="historyLoading"
-        (refreshRequested)="loadHistory()"
-        (loadRequested)="applyHistory($event)"
-      ></app-experiment-history-panel>
-
-      <app-training-control-panel
-        [config]="activeConfig"
-        (sessionChange)="handleSessionChange($event)"
-      ></app-training-control-panel>
-    </main>
+    </ng-template>
   `,
   styles: [`
-    .page { display: flex; flex-direction: column; gap: 24px; padding: 32px 40px 72px; max-width: 1320px; margin: 0 auto; }
-    .hero {
-      display: flex;
-      justify-content: space-between;
-      gap: 28px;
-      align-items: flex-start;
-      padding: 34px 36px;
-      border-radius: 28px;
-      background:
-        linear-gradient(135deg, rgba(255,255,255,0.92), rgba(255,255,255,0.78)),
-        linear-gradient(135deg, #dbeafe, #ecfeff);
-      border: 1px solid rgba(255,255,255,0.7);
-      box-shadow: 0 28px 60px rgba(30, 41, 59, 0.08);
-      backdrop-filter: blur(10px);
+    :host {
+      display: block;
+      min-height: 100vh;
+      color: var(--text);
     }
-    .hero-copy { max-width: 760px; }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin-top: 0;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
     .eyebrow {
       display: inline-flex;
-      margin-bottom: 14px;
-      padding: 8px 12px;
+      width: fit-content;
+      margin-bottom: 12px;
+      padding: 5px 9px;
       border-radius: 999px;
-      background: rgba(15, 23, 42, 0.06);
-      color: #0f172a;
+      background: var(--accent-soft);
+      color: var(--accent-dark);
       font-size: 12px;
       font-weight: 800;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.04em;
     }
-    .hero h1 { margin: 0 0 12px; font-size: 38px; line-height: 1.15; color: #0f172a; }
-    .hero p { margin: 0; color: #475569; max-width: 760px; font-size: 17px; line-height: 1.75; }
-    .hero-points { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
-    .hero-points span {
-      padding: 10px 14px;
-      border-radius: 14px;
-      background: rgba(255,255,255,0.7);
-      color: #1e293b;
-      font-size: 13px;
-      font-weight: 700;
-      border: 1px solid rgba(148, 163, 184, 0.16);
+
+    .primary-action,
+    .ghost-action {
+      min-height: 42px;
+      border-radius: 10px;
+      padding: 0 16px;
+      font-weight: 760;
+      white-space: nowrap;
     }
-    .hero-badges { display: flex; flex-wrap: wrap; gap: 12px; justify-content: flex-end; }
-    .hero-badges span {
-      padding: 10px 14px;
-      border-radius: 999px;
-      background: rgba(255,255,255,0.92);
-      color: #0f172a;
-      font-size: 12px;
-      font-weight: 800;
-      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+
+    .primary-action {
+      border: 1px solid #111111;
+      background: #111111;
+      color: #ffffff;
     }
-    .overview-grid {
+
+    .primary-action:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .primary-action.large {
+      min-height: 50px;
+      padding: 0 24px;
+      font-size: 16px;
+    }
+
+    .primary-action.full {
+      width: 100%;
+    }
+
+    .ghost-action {
+      border: 1px solid var(--border-strong);
+      background: #ffffff;
+      color: var(--text);
+    }
+
+    .content-card,
+    .path-tree-card,
+    .path-detail-card,
+    .lab-top,
+    .lab-config,
+    .lab-visual,
+    .lab-explain,
+    .landing-hero,
+    .public-section,
+    .auth-card,
+    .dashboard-welcome {
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: #ffffff;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .public-page {
+      width: min(1180px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 24px 0 34px;
+    }
+
+    .landing-hero {
+      min-height: calc(100vh - 96px);
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      grid-template-rows: auto 1fr;
+      padding: 26px;
+      background:
+        radial-gradient(circle at 80% 20%, rgba(16, 163, 127, 0.08), transparent 26rem),
+        #ffffff;
+    }
+
+    .landing-nav,
+    .public-footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .landing-brand,
+    .auth-brand,
+    .sidebar-brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      text-align: left;
+    }
+
+    .landing-brand span,
+    .auth-brand span,
+    .sidebar-brand span {
+      display: grid;
+      width: 38px;
+      height: 38px;
+      place-items: center;
+      border-radius: 10px;
+      background: #111111;
+      color: #ffffff;
+      font-weight: 850;
+      letter-spacing: -0.04em;
+    }
+
+    .landing-copy {
+      display: grid;
+      align-content: center;
+      max-width: 860px;
+      padding: 56px 4vw;
+    }
+
+    .landing-copy h1 {
+      margin-bottom: 18px;
+      font-size: clamp(42px, 7vw, 82px);
+      line-height: 0.98;
+      letter-spacing: -0.07em;
+    }
+
+    .landing-copy p {
+      max-width: 760px;
+      margin-bottom: 28px;
+      color: var(--text-muted);
+      font-size: 20px;
+      line-height: 1.72;
+    }
+
+    .public-section {
+      margin-top: 22px;
+      padding: 28px;
+    }
+
+    .section-heading {
+      max-width: 760px;
+      margin-bottom: 22px;
+    }
+
+    .section-heading.compact {
+      margin-bottom: 16px;
+    }
+
+    .section-heading h2,
+    .content-card h2,
+    .path-header h2 {
+      margin-bottom: 10px;
+      color: var(--text);
+      font-size: 30px;
+      line-height: 1.15;
+      letter-spacing: -0.04em;
+    }
+
+    .section-heading p,
+    .content-card p,
+    .path-header p {
+      color: var(--text-muted);
+      line-height: 1.72;
+    }
+
+    .public-feature-grid,
+    .progress-grid,
+    .continue-grid,
+    .algorithm-grid,
+    .dataset-grid,
+    .quiz-grid,
+    .profile-grid,
+    .lab-results {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 16px;
     }
-    .overview-card {
+
+    .public-feature-grid article,
+    .continue-grid article,
+    .algorithm-card,
+    .dataset-card,
+    .quiz-card,
+    .profile-grid div,
+    .lab-results article,
+    .progress-grid article {
+      padding: 18px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: var(--surface-subtle);
+    }
+
+    .public-feature-grid article span,
+    .algorithm-card > span,
+    .dataset-card span,
+    .quiz-card > span,
+    .group-title span {
+      width: fit-content;
+      padding: 5px 9px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent-dark);
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .public-feature-grid h3,
+    .continue-grid h3,
+    .algorithm-card h3,
+    .dataset-card h3,
+    .quiz-card h3 {
+      margin: 12px 0 8px;
+      color: var(--text);
+      font-size: 18px;
+    }
+
+    .public-feature-grid p,
+    .algorithm-card p,
+    .dataset-card p,
+    .quiz-card p,
+    .continue-grid p {
+      margin-bottom: 0;
+      color: var(--text-muted);
+      line-height: 1.65;
+    }
+
+    .public-footer {
+      margin-top: 18px;
+      padding: 18px 6px;
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    .public-footer button {
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      font-weight: 750;
+    }
+
+    .auth-page {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 28px;
+    }
+
+    .auth-brand {
+      position: fixed;
+      top: 24px;
+      left: 28px;
+    }
+
+    .auth-shell {
+      width: min(960px, 100%);
+      display: grid;
+      grid-template-columns: minmax(0, 0.9fr) minmax(340px, 1fr);
+      gap: 28px;
+      align-items: center;
+    }
+
+    .auth-intro h1 {
+      margin-bottom: 14px;
+      font-size: clamp(34px, 5vw, 56px);
+      line-height: 1.05;
+      letter-spacing: -0.06em;
+    }
+
+    .auth-intro p {
+      color: var(--text-muted);
+      font-size: 17px;
+      line-height: 1.7;
+    }
+
+    .auth-card {
+      padding: 12px;
+    }
+
+    .auth-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-bottom: 12px;
+      padding: 4px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--surface-muted);
+    }
+
+    .auth-tabs button,
+    .auth-links button {
+      border: 0;
+      border-radius: 10px;
+      background: transparent;
+      color: var(--text-muted);
+      font-weight: 780;
+    }
+
+    .auth-tabs button {
+      min-height: 38px;
+    }
+
+    .auth-tabs button.active {
+      background: #ffffff;
+      color: var(--text);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .auth-links {
       display: flex;
-      flex-direction: column;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 8px 2px;
+    }
+
+    .register-form {
+      display: grid;
+      gap: 14px;
+      padding: 16px;
+    }
+
+    .register-form label,
+    .field,
+    .lab-top label {
+      display: grid;
       gap: 8px;
-      padding: 20px 22px;
-      border-radius: 22px;
-      background: rgba(255,255,255,0.88);
-      border: 1px solid rgba(255,255,255,0.8);
-      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.06);
+      color: var(--text);
+      font-weight: 700;
     }
-    .overview-card strong {
-      font-size: 28px;
+
+    .register-form input,
+    .field input,
+    .lab-top input {
+      min-height: 44px;
+      padding: 10px 12px;
+    }
+
+    .hint {
+      min-height: 22px;
+      margin: 12px 8px 0;
+      color: var(--text-muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .learning-shell {
+      --sidebar-width: 260px;
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+      transition: grid-template-columns 0.18s ease;
+    }
+
+    .learning-shell.sidebar-collapsed {
+      --sidebar-width: 76px;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 20px;
+      padding: 22px 16px;
+      border-right: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.88);
+      backdrop-filter: blur(14px);
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .sidebar-top {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .sidebar-brand {
+      min-width: 0;
+      padding: 0;
+      cursor: pointer;
+    }
+
+    .sidebar-brand strong {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .sidebar-toggle {
+      display: grid;
+      width: 36px;
+      height: 36px;
+      place-items: center;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #ffffff;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 22px;
       line-height: 1;
-      color: #0f172a;
     }
-    .overview-card span {
-      color: #64748b;
-      font-weight: 600;
+
+    .sidebar-nav {
+      display: grid;
+      align-content: start;
+      gap: 6px;
     }
-    .workspace-grid { display: grid; grid-template-columns: minmax(0, 1.9fr) minmax(340px, 1fr); gap: 22px; align-items: start; }
-    .card {
-      background: rgba(255,255,255,0.92);
-      border-radius: 24px;
+
+    .sidebar-nav button {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      width: 100%;
+      border: 0;
+      border-radius: 12px;
+      padding: 11px 12px;
+      background: transparent;
+      color: var(--text-muted);
+      text-align: left;
+      min-width: 0;
+      cursor: pointer;
+    }
+
+    .nav-icon {
+      flex: 0 0 28px;
+      display: grid;
+      width: 28px;
+      height: 28px;
+      place-items: center;
+      border-radius: 9px;
+      background: var(--surface-muted);
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 850;
+    }
+
+    .nav-copy {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+      margin-left: 6px;
+    }
+
+    .nav-copy span {
+      font-size: 14px;
+      font-weight: 780;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .nav-copy small {
+      color: var(--text-subtle);
+      font-size: 11px;
+    }
+
+    .sidebar-nav button.active {
+      background: #111111;
+      color: #ffffff;
+    }
+
+    .sidebar-nav button.active .nav-icon {
+      background: rgba(255,255,255,0.16);
+      color: #ffffff;
+    }
+
+    .sidebar-nav button.active small {
+      color: rgba(255,255,255,0.68);
+    }
+
+    .sidebar-user {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: var(--surface-subtle);
+      min-width: 0;
+    }
+
+    .user-avatar {
+      display: grid;
+      width: 34px;
+      height: 34px;
+      place-items: center;
+      border-radius: 999px;
+      background: #111111;
+      color: #ffffff;
+      font-size: 14px;
+      font-weight: 850;
+    }
+
+    .sidebar-user-copy {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .sidebar-user-copy strong {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .sidebar-user-copy span {
+      color: var(--text-muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .sidebar-user button {
+      grid-column: 1 / -1;
+      min-height: 36px;
+      border: 1px solid var(--border-strong);
+      border-radius: 10px;
+      background: #ffffff;
+      color: var(--text);
+      font-weight: 750;
+    }
+
+    .collapsed-label {
+      display: none;
+    }
+
+    .sidebar.collapsed {
+      gap: 16px;
+      padding: 18px 10px;
+    }
+
+    .sidebar.collapsed .sidebar-top {
+      grid-template-columns: 1fr;
+      justify-items: center;
+    }
+
+    .sidebar.collapsed .sidebar-brand {
+      justify-content: center;
+    }
+
+    .sidebar.collapsed .sidebar-brand strong,
+    .sidebar.collapsed .nav-copy,
+    .sidebar.collapsed .sidebar-user-copy,
+    .sidebar.collapsed .expanded-label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+    }
+
+    .sidebar.collapsed .sidebar-toggle {
+      width: 44px;
+      height: 34px;
+    }
+
+    .sidebar.collapsed .sidebar-nav button {
+      justify-content: center;
+      padding: 10px 0;
+    }
+
+    .sidebar.collapsed .nav-icon {
+      flex-basis: 34px;
+      width: 34px;
+      height: 34px;
+    }
+
+    .sidebar.collapsed .sidebar-user {
+      grid-template-columns: 1fr;
+      justify-items: center;
+      padding: 10px 6px;
+    }
+
+    .sidebar.collapsed .sidebar-user button {
+      width: 34px;
+      min-height: 32px;
+      padding: 0;
+    }
+
+    .sidebar.collapsed .collapsed-label {
+      display: inline;
+    }
+
+    .app-main {
+      width: min(1260px, calc(100% - 40px));
+      min-width: 0;
+      margin: 0 auto;
+      padding: 30px 0 70px;
+    }
+
+    .learning-shell.lab-shell .app-main {
+      width: 100%;
+      max-width: none;
+      margin: 0;
+      padding: 24px clamp(16px, 1.8vw, 30px) 64px;
+    }
+
+    .app-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      align-items: flex-start;
+      margin-bottom: 22px;
       padding: 24px;
-      box-shadow: 0 24px 48px rgba(15, 23, 42, 0.08);
-      border: 1px solid rgba(255,255,255,0.7);
-      backdrop-filter: blur(10px);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: #ffffff;
+      box-shadow: var(--shadow-sm);
     }
-    .side-card {
+
+    .app-header h1 {
+      max-width: 820px;
+      margin-bottom: 10px;
+      font-size: clamp(30px, 4vw, 46px);
+      line-height: 1.05;
+      letter-spacing: -0.05em;
+    }
+
+    .app-header p {
+      max-width: 760px;
+      margin-bottom: 0;
+      color: var(--text-muted);
+      line-height: 1.7;
+    }
+
+    .dashboard-page,
+    .paths-page,
+    .theory-page,
+    .lab-page,
+    .analysis-page,
+    .dataset-page,
+    .quiz-page,
+    .profile-page {
+      display: grid;
+      gap: 22px;
+    }
+
+    .dashboard-welcome {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      align-items: center;
+      padding: 24px;
+    }
+
+    .dashboard-welcome span {
+      color: var(--accent-dark);
+      font-size: 13px;
+      font-weight: 850;
+    }
+
+    .dashboard-welcome h2 {
+      margin: 8px 0;
+      font-size: 28px;
+      letter-spacing: -0.04em;
+    }
+
+    .dashboard-welcome p {
+      margin-bottom: 0;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    .dashboard-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 300px;
+      gap: 22px;
+      align-items: start;
+    }
+
+    .dashboard-main,
+    .dashboard-side {
+      display: grid;
+      gap: 18px;
+    }
+
+    .content-card {
+      padding: 22px;
+    }
+
+    .progress-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .progress-grid strong,
+    .lab-results strong,
+    .profile-grid strong {
+      display: block;
+      overflow-wrap: anywhere;
+      color: var(--text);
+      font-size: 24px;
+      line-height: 1.18;
+    }
+
+    .progress-grid span,
+    .lab-results span,
+    .profile-grid span {
+      display: block;
+      margin-top: 8px;
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 750;
+    }
+
+    .continue-grid article small {
+      color: var(--accent-dark);
+      font-weight: 850;
+    }
+
+    .continue-grid article strong {
+      display: block;
+      margin: 8px 0;
+      color: var(--text);
+      font-size: 18px;
+      overflow-wrap: anywhere;
+    }
+
+    .record-table {
+      display: grid;
+      gap: 8px;
+    }
+
+    .record-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1.3fr 0.7fr 0.8fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface-subtle);
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    .record-row.header {
+      background: #ffffff;
+      color: var(--text);
+      font-weight: 850;
+    }
+
+    .record-row button {
+      border: 1px solid var(--border-strong);
+      border-radius: 9px;
+      background: #ffffff;
+      color: var(--text);
+      font-weight: 750;
+      min-height: 34px;
+      padding: 0 10px;
+    }
+
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 6px;
+      margin-top: 14px;
+    }
+
+    .calendar-grid span,
+    .badge-list span,
+    .tag-row small {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 32px;
+      border-radius: 999px;
+      background: var(--surface-muted);
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .calendar-grid span.active {
+      background: var(--accent-soft);
+      color: var(--accent-dark);
+    }
+
+    .badge-list,
+    .tag-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .weak-list,
+    .detail-block ul,
+    .tip-card ul {
+      margin: 10px 0 0;
+      padding-left: 18px;
+      color: var(--text-muted);
+      line-height: 1.8;
+    }
+
+    .path-header {
+      padding: 4px;
+    }
+
+    .path-layout,
+    .split-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+      gap: 22px;
+      align-items: start;
+    }
+
+    .path-tree-card,
+    .path-detail-card {
+      padding: 24px;
+    }
+
+    .path-group + .path-group {
+      margin-top: 18px;
+      padding-top: 18px;
+      border-top: 1px solid var(--border);
+    }
+
+    .path-group h3 {
+      margin-bottom: 12px;
+      color: var(--text);
+    }
+
+    .tree-list {
+      position: relative;
+      display: grid;
+      gap: 8px;
+      padding-left: 18px;
+    }
+
+    .tree-list::before {
+      content: '';
+      position: absolute;
+      left: 5px;
+      top: 10px;
+      bottom: 10px;
+      width: 1px;
+      background: var(--border-strong);
+    }
+
+    .tree-list button {
+      position: relative;
+      min-height: 40px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #ffffff;
+      color: var(--text-muted);
+      text-align: left;
+      padding: 0 12px;
+      font-weight: 760;
+    }
+
+    .tree-list button::before {
+      content: '';
+      position: absolute;
+      left: -18px;
+      top: 50%;
+      width: 14px;
+      height: 1px;
+      background: var(--border-strong);
+    }
+
+    .tree-list button.active {
+      border-color: rgba(16, 163, 127, 0.34);
+      background: var(--accent-soft);
+      color: var(--accent-dark);
+    }
+
+    .path-detail-card {
       position: sticky;
       top: 24px;
-      background:
-        linear-gradient(180deg, rgba(255,255,255,0.96), rgba(248,250,252,0.96)),
-        #fff;
     }
-    .card-header { margin-bottom: 16px; }
-    .card-header h2 { margin: 0 0 8px; }
-    .card-header p { margin: 0; color: #64748b; }
-    .field { display: flex; flex-direction: column; gap: 8px; font-weight: 700; color: #334155; }
-    .field input {
-      border: 1px solid #d7e1f0;
-      border-radius: 16px;
-      padding: 13px 14px;
-      background: rgba(255,255,255,0.96);
-    }
-    .summary-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 14px;
-      margin: 18px 0;
+
+    .detail-block {
+      margin-top: 18px;
       padding: 16px;
-      border-radius: 18px;
-      background: linear-gradient(180deg, #f8fbff, #f8fafc);
-      border: 1px solid #e2e8f0;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--surface-subtle);
     }
-    .summary-grid strong { display: block; font-size: 12px; color: #64748b; }
-    .summary-grid span { display: block; margin-top: 4px; font-weight: 600; word-break: break-all; }
-    button.primary {
-      border: 0;
-      border-radius: 16px;
-      padding: 14px 18px;
-      background: linear-gradient(135deg, #2563eb, #1d4ed8);
-      color: #fff;
-      font-weight: 700;
-      cursor: pointer;
+
+    .detail-block strong {
+      color: var(--text);
+    }
+
+    .detail-block p {
+      margin: 10px 0 0;
+      color: var(--text-muted);
+      line-height: 1.65;
+    }
+
+    .path-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .algorithm-group {
+      display: grid;
+      gap: 14px;
+      margin-top: 22px;
+    }
+
+    .group-title,
+    .param-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .group-title small,
+    .param-row small {
+      color: var(--text-muted);
+      font-weight: 750;
+    }
+
+    .algorithm-card {
+      display: flex;
+      flex-direction: column;
+      min-height: 230px;
+      gap: 10px;
+    }
+
+    .param-row {
+      margin-top: auto;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+
+    .param-row button {
+      border: 1px solid var(--border-strong);
+      border-radius: 10px;
+      padding: 8px 12px;
+      background: #ffffff;
+      color: var(--text);
+      font-weight: 750;
+    }
+
+    .lab-page {
       width: 100%;
-      box-shadow: 0 18px 30px rgba(37, 99, 235, 0.22);
+      min-width: 0;
     }
-    button.primary:disabled { opacity: 0.6; cursor: not-allowed; }
-    .hint { margin: 12px 0 0; color: #64748b; min-height: 20px; line-height: 1.6; }
-    @media (max-width: 980px) {
-      .overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .workspace-grid { grid-template-columns: 1fr; }
-      .hero { flex-direction: column; }
-      .side-card { position: static; }
-      .page { padding: 24px 18px 56px; }
-      .hero { padding: 28px 22px; }
-      .hero h1 { font-size: 30px; }
+
+    .lab-top {
+      display: grid;
+      grid-template-columns: minmax(280px, 1fr) minmax(170px, auto) auto;
+      gap: 14px;
+      align-items: end;
+      padding: 16px;
+      min-width: 0;
     }
-    @media (max-width: 640px) {
-      .overview-grid { grid-template-columns: 1fr; }
+
+    .lab-top > div {
+      display: grid;
+      gap: 8px;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface-subtle);
+    }
+
+    .lab-top > div span {
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .lab-grid {
+      display: grid;
+      grid-template-columns: clamp(260px, 18vw, 320px) minmax(0, 1fr) clamp(240px, 16vw, 300px);
+      gap: clamp(14px, 1.25vw, 20px);
+      align-items: start;
+      width: 100%;
+      min-width: 0;
+    }
+
+    .lab-config,
+    .lab-visual,
+    .lab-explain {
+      min-width: 0;
+      padding: 16px;
+      align-self: start;
+    }
+
+    .lab-config,
+    .lab-explain {
+      position: sticky;
+      top: 20px;
+    }
+
+    .lab-visual {
+      display: grid;
+      gap: 14px;
+      width: 100%;
+      min-width: 0;
+    }
+
+    .lab-panel-title {
+      margin-bottom: 14px;
+    }
+
+    .lab-panel-title span {
+      color: var(--accent-dark);
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .lab-panel-title h2 {
+      margin: 6px 0 0;
+      font-size: 18px;
+      line-height: 1.25;
+      letter-spacing: -0.03em;
+    }
+
+    .lab-explain {
+      display: grid;
+      gap: 14px;
+    }
+
+    .lab-explain .content-card {
+      padding: 14px;
+    }
+
+    .lab-explain h3 {
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    .lab-explain p {
+      margin-bottom: 0;
+      color: var(--text-muted);
+      line-height: 1.65;
+      font-size: 14px;
+    }
+
+    .lab-results {
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr) minmax(0, 0.9fr) minmax(0, 1.3fr);
+      min-width: 0;
+    }
+
+    .lab-results article {
+      background: #ffffff;
+    }
+
+    .result-summary,
+    .save-summary {
+      display: grid;
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .result-summary div,
+    .save-summary div {
+      display: grid;
+      gap: 4px;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--surface-subtle);
+    }
+
+    .result-summary strong,
+    .save-summary strong {
+      color: var(--text);
+      overflow-wrap: anywhere;
+    }
+
+    .result-summary span,
+    .save-summary span {
+      color: var(--text-muted);
+      font-size: 13px;
+      line-height: 1.55;
+      overflow-wrap: anywhere;
+    }
+
+    .dataset-card {
+      display: grid;
+      gap: 18px;
+    }
+
+    .dataset-card dl {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin: 0;
+    }
+
+    .dataset-card dl div {
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #ffffff;
+    }
+
+    .dataset-card dt {
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .dataset-card dd {
+      margin: 4px 0 0;
+      color: var(--text);
+      font-weight: 800;
+    }
+
+    .quiz-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .quiz-card {
+      display: grid;
+      gap: 12px;
+    }
+
+    .empty-state {
+      padding: 18px;
+      border: 1px dashed var(--border-strong);
+      border-radius: 14px;
+      background: var(--surface-subtle);
+      color: var(--text-muted);
+      line-height: 1.65;
+    }
+
+    @media (max-width: 1380px) {
+      .lab-grid {
+        grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
+      }
+
+      .lab-explain {
+        grid-column: 1 / -1;
+        position: static;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .lab-explain .lab-panel-title {
+        grid-column: 1 / -1;
+        margin-bottom: 0;
+      }
+    }
+
+    @media (max-width: 1180px) {
+      .learning-shell {
+        --sidebar-width: 220px;
+      }
+
+      .learning-shell.sidebar-collapsed {
+        --sidebar-width: 76px;
+      }
+
+      .app-main {
+        width: min(100% - 32px, 1260px);
+      }
+
+      .dashboard-layout,
+      .path-layout,
+      .split-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .lab-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .lab-config,
+      .lab-explain,
+      .path-detail-card {
+        position: static;
+      }
+
+      .lab-explain {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 820px) {
+      .auth-shell,
+      .lab-top {
+        grid-template-columns: 1fr;
+      }
+
+      .auth-intro {
+        text-align: center;
+      }
+
+      .app-header,
+      .dashboard-welcome,
+      .landing-nav,
+      .public-footer {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .progress-grid,
+      .public-feature-grid,
+      .continue-grid,
+      .algorithm-grid,
+      .dataset-grid,
+      .quiz-grid,
+      .profile-grid,
+      .lab-results {
+        grid-template-columns: 1fr;
+      }
+
+      .record-row,
+      .record-row.header {
+        grid-template-columns: 1fr;
+      }
+
+      .learning-shell {
+        --sidebar-width: 72px;
+      }
+
+      .learning-shell.sidebar-collapsed {
+        --sidebar-width: 72px;
+      }
+
+      .sidebar {
+        padding: 14px 8px;
+      }
+
+      .sidebar:not(.collapsed) .sidebar-brand strong,
+      .sidebar:not(.collapsed) .nav-copy,
+      .sidebar:not(.collapsed) .sidebar-user-copy,
+      .sidebar:not(.collapsed) .expanded-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+      }
+
+      .sidebar:not(.collapsed) .sidebar-top {
+        grid-template-columns: 1fr;
+        justify-items: center;
+      }
+
+      .sidebar:not(.collapsed) .sidebar-nav button {
+        justify-content: center;
+        padding: 10px 0;
+      }
+
+      .sidebar:not(.collapsed) .sidebar-user {
+        grid-template-columns: 1fr;
+        justify-items: center;
+        padding: 10px 6px;
+      }
+
+      .sidebar:not(.collapsed) .sidebar-user button {
+        width: 34px;
+        min-height: 32px;
+        padding: 0;
+      }
+
+      .sidebar:not(.collapsed) .collapsed-label {
+        display: inline;
+      }
+
+      .learning-shell.lab-shell .app-main,
+      .app-main {
+        width: 100%;
+        padding: 18px 12px 48px;
+      }
     }
   `]
 })
 export class WorkbenchPageComponent implements OnInit, OnDestroy {
+  readonly appNavItems: NavItem[] = [
+    { key: 'dashboard', label: '首页', eyebrow: 'Dashboard', icon: '⌂' },
+    { key: 'paths', label: '课程路径', eyebrow: 'Roadmap', icon: '⌁' },
+    { key: 'lab', label: '算法实验室', eyebrow: 'Lab', icon: '◇' },
+    { key: 'analysis', label: '我的实验记录', eyebrow: 'Records', icon: '▤' },
+    { key: 'quiz', label: '练习题', eyebrow: 'Quiz', icon: '✓' },
+    { key: 'profile', label: '个人中心', eyebrow: 'Profile', icon: '○' },
+    { key: 'theory', label: '算法教学', eyebrow: 'Theory', icon: 'ƒ' },
+    { key: 'datasets', label: '数据集广场', eyebrow: 'Data', icon: '▦' }
+  ];
+
+  readonly pageMeta: Record<PageKey, PageMeta> = {
+    home: {
+      eyebrow: 'Public Home',
+      title: '交互式机器学习可视化学习平台',
+      description: '通过可视化实验理解监督学习、无监督学习、强化学习。'
+    },
+    auth: {
+      eyebrow: 'Account',
+      title: '用户注册 / 登录',
+      description: '登录后进入学习仪表盘，保存实验并查看学习进度。'
+    },
+    dashboard: {
+      eyebrow: '学习仪表盘 / 用户主页',
+      title: '学习仪表盘',
+      description: '展示学习进度、最近实验、推荐任务、学习日历和薄弱知识点提醒。'
+    },
+    paths: {
+      eyebrow: '课程路径 / 知识地图',
+      title: '课程路径',
+      description: '用树状结构展示机器学习知识体系，并在右侧解释当前节点。'
+    },
+    theory: {
+      eyebrow: '算法教学 / 理论讲解',
+      title: '算法教学',
+      description: '先理解算法任务、适用场景和参数含义，再进入实验室调参。'
+    },
+    lab: {
+      eyebrow: '算法实验室 / 训练页面',
+      title: '算法实验室',
+      description: '集中完成实验配置、训练控制、过程可视化、结果指标和解释提示。'
+    },
+    analysis: {
+      eyebrow: '我的实验记录',
+      title: '实验记录与结果分析',
+      description: '查询历史实验、回填配置，并进行模型对比。'
+    },
+    datasets: {
+      eyebrow: '数据集页面 / 数据集广场',
+      title: '数据集广场',
+      description: '集中查看课程数据集与上传后保存的数据。'
+    },
+    quiz: {
+      eyebrow: '练习题 / 测验页面',
+      title: '练习题',
+      description: '用轻量练习检查概念理解和实验判断。'
+    },
+    profile: {
+      eyebrow: '个人中心',
+      title: '个人中心',
+      description: '查看当前账号、角色和实验保存状态。'
+    }
+  };
+
+  readonly pathGroups: PathGroup[] = [
+    {
+      title: '机器学习基础',
+      nodes: [
+        {
+          id: 'data-feature',
+          title: '数据与特征',
+          description: '理解样本、特征、标签和特征工程，是所有机器学习实验的起点。',
+          prerequisites: ['基础数学符号', '表格数据概念'],
+          experiment: '上传 CSV 并选择两个数值特征进行二维可视化。',
+          practice: '判断哪些列适合作为特征，哪些列适合作为标签。'
+        },
+        {
+          id: 'train-test',
+          title: '训练集 / 测试集',
+          description: '训练集用于学习模型参数，测试集用于评估模型泛化表现。',
+          prerequisites: ['数据与特征'],
+          experiment: '在线性回归或分类任务中观察不同数据集带来的指标变化。',
+          practice: '解释为什么不能只看训练集效果。'
+        },
+        {
+          id: 'loss',
+          title: '损失函数',
+          description: '损失函数衡量模型预测与真实结果之间的差距，是训练优化的目标。',
+          prerequisites: ['训练集 / 测试集', '误差概念'],
+          experiment: '在训练控制模块观察 Loss 曲线下降或震荡。',
+          practice: '判断学习率过大时 Loss 为什么可能震荡。'
+        },
+        {
+          id: 'overfit',
+          title: '过拟合与欠拟合',
+          description: '过拟合表示模型记住了训练数据细节，欠拟合表示模型能力不足。',
+          prerequisites: ['训练集 / 测试集', '损失函数'],
+          experiment: '调大树深度或迭代次数，观察指标和边界变化。',
+          practice: '区分过拟合和欠拟合的现象。'
+        },
+        {
+          id: 'metrics',
+          title: '模型评估',
+          description: '使用准确率、损失值、轮廓系数、解释方差等指标判断模型效果。',
+          prerequisites: ['损失函数', '任务类型'],
+          experiment: '进入结果分析页比较两个算法的核心指标。',
+          practice: '为分类、聚类、降维任务选择合适指标。'
+        }
+      ]
+    },
+    {
+      title: '监督学习',
+      nodes: [
+        {
+          id: 'linear-regression',
+          title: '线性回归',
+          description: '用线性函数拟合连续数值目标，适合解释回归线和误差下降。',
+          prerequisites: ['损失函数', '数据与特征'],
+          experiment: '选择线性回归，观察回归线随训练步数更新。',
+          practice: '说明学习率对回归训练的影响。'
+        },
+        {
+          id: 'logistic-regression',
+          title: '逻辑回归',
+          description: '使用概率输出完成分类任务，适合展示分类边界。',
+          prerequisites: ['线性模型', '分类任务'],
+          experiment: '选择逻辑回归，观察 Accuracy 与决策边界。',
+          practice: '解释概率阈值如何影响分类结果。'
+        },
+        {
+          id: 'decision-tree',
+          title: '决策树',
+          description: '通过特征划分构造树结构，适合解释模型决策过程。',
+          prerequisites: ['分类任务', '模型评估'],
+          experiment: '调整最大深度，观察树模型复杂度变化。',
+          practice: '判断深度过大为什么可能过拟合。'
+        },
+        {
+          id: 'svm',
+          title: 'SVM',
+          description: '寻找最大间隔分类边界，适合观察边界和间隔思想。',
+          prerequisites: ['分类任务', '特征空间'],
+          experiment: '选择 SVM，观察决策边界与 Hinge Loss。',
+          practice: '解释正则化参数对边界的影响。'
+        }
+      ]
+    },
+    {
+      title: '无监督学习',
+      nodes: [
+        {
+          id: 'kmeans',
+          title: 'K-Means',
+          description: '根据样本距离迭代更新聚类中心，发现无标签数据结构。',
+          prerequisites: ['数据与特征', '距离度量'],
+          experiment: '调整 K 值，观察聚类中心和簇分布变化。',
+          practice: '判断 K 值过小或过大的影响。'
+        },
+        {
+          id: 'pca',
+          title: 'PCA',
+          description: '通过主成分投影压缩特征维度，保留主要方差信息。',
+          prerequisites: ['特征空间', '方差概念'],
+          experiment: '观察 explained variance 和二维投影结果。',
+          practice: '解释为什么降维可能丢失信息。'
+        }
+      ]
+    },
+    {
+      title: '强化学习',
+      nodes: [
+        {
+          id: 'state-action-reward',
+          title: '状态 / 动作 / 奖励',
+          description: '强化学习通过智能体与环境交互，从奖励信号中学习策略。',
+          prerequisites: ['基本概率', '序列决策'],
+          experiment: '在网格世界中观察状态、动作和奖励变化。',
+          practice: '设计一个简单奖励函数。'
+        },
+        {
+          id: 'q-learning',
+          title: 'Q-Learning',
+          description: '用 Q 值表估计状态-动作价值，并逐步学习更优策略。',
+          prerequisites: ['状态 / 动作 / 奖励', '探索与利用'],
+          experiment: '选择 Q-Learning，观察策略路径和成功率。',
+          practice: '解释 epsilon 为什么要逐步衰减。'
+        }
+      ]
+    }
+  ];
+
+  readonly practiceItems: PracticeItem[] = [
+    {
+      title: '判断算法适用场景',
+      level: '基础',
+      description: '给定数据集特征和任务目标，选择更合适的算法并说明理由。',
+      tags: ['算法选择', '任务类型']
+    },
+    {
+      title: '解释训练曲线变化',
+      level: '进阶',
+      description: '观察 loss / accuracy 曲线，判断是否存在震荡、欠拟合或过拟合迹象。',
+      tags: ['Loss', 'Accuracy', '调参']
+    },
+    {
+      title: '比较两个模型结果',
+      level: '综合',
+      description: '使用同一数据集对比两个算法，并从指标和可视化结果解释差异。',
+      tags: ['模型对比', '实验复盘']
+    }
+  ];
+
+  readonly calendarDays = [
+    { label: '一', active: true },
+    { label: '二', active: true },
+    { label: '三', active: false },
+    { label: '四', active: true },
+    { label: '五', active: false },
+    { label: '六', active: false },
+    { label: '日', active: false }
+  ];
+
+  readonly achievementBadges = ['首次登录', '完成配置', '训练观察者', '实验复盘'];
+  readonly weakPoints = ['损失函数与学习率关系', 'K-Means 的 K 值选择', '训练集 / 测试集区别'];
+
+  activePage: PageKey = 'home';
+  authMode: AuthMode = 'login';
+  forgotMessage = '';
+  registerUsername = '';
+  registerEmail = '';
+  registerPassword = '';
+  registerPasswordConfirm = '';
+  registerMessage = '';
+  sidebarCollapsed = false;
+  selectedPathNode: PathNode = this.pathGroups[0].nodes[0];
+
   algorithms: AlgorithmMeta[] = [];
   datasets: DatasetMeta[] = [];
   experimentCases: ExperimentCase[] = [];
@@ -305,24 +2233,191 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
     private readonly experimentContext: ExperimentContextService
   ) {}
 
+  get currentPageMeta(): PageMeta {
+    return this.pageMeta[this.activePage];
+  }
+
+  get userInitial(): string {
+    return (this.currentUser?.displayName || '访').trim().slice(0, 1).toUpperCase();
+  }
+
   get canSaveExperiment(): boolean {
     return !!this.currentUser && !!this.activeConfig && this.experimentName.trim().length > 0;
   }
 
+  get selectedLearningTypeLabel(): string {
+    return this.activeConfig ? this.labelFor(this.activeConfig.learningType) : '未选择';
+  }
+
+  get selectedAlgorithmName(): string {
+    if (!this.activeConfig) {
+      return '未选择';
+    }
+    return this.algorithms.find((item) => item.code === this.activeConfig?.algorithm)?.name
+      ?? this.activeConfig.algorithm;
+  }
+
+  get selectedDatasetName(): string {
+    if (!this.activeConfig) {
+      return '未选择';
+    }
+    return this.datasets.find((item) => item.code === this.activeConfig?.dataset)?.name
+      ?? this.activeConfig.dataset;
+  }
+
+  get algorithmGroups(): Array<{ label: string; items: AlgorithmMeta[] }> {
+    return (['supervised', 'unsupervised', 'reinforcement'] as LearningType[])
+      .map((type) => ({
+        label: this.labelFor(type),
+        items: this.algorithms.filter((item) => item.learningType === type)
+      }))
+      .filter((group) => group.items.length > 0);
+  }
+
+  get completedCourseCount(): number {
+    return this.currentUser ? Math.min(3, 1 + this.experimentHistory.length) : 0;
+  }
+
+  get completedExperimentCount(): number {
+    return this.experimentHistory.length;
+  }
+
+  get practiceAccuracy(): string {
+    return this.experimentHistory.length > 0 ? '86%' : '待开始';
+  }
+
+  get currentLevel(): string {
+    if (!this.currentUser) {
+      return '访客';
+    }
+    return this.experimentHistory.length >= 3 ? '进阶学习者' : '入门学习者';
+  }
+
+  get todayTask(): string {
+    if (this.activeConfig) {
+      return `继续完成 ${this.selectedAlgorithmName} 的训练实验，并在结果分析页比较模型表现。`;
+    }
+    return '从课程路径选择一个知识节点，然后进入算法实验室完成一次可视化训练。';
+  }
+
+  get recommendedNextLesson(): string {
+    if (!this.activeConfig) {
+      return '数据与特征';
+    }
+    if (this.activeConfig.learningType === 'unsupervised') {
+      return '聚类结果评价';
+    }
+    if (this.activeConfig.learningType === 'reinforcement') {
+      return '探索与利用';
+    }
+    return '模型评估与过拟合';
+  }
+
+  get recentExperiments(): ExperimentRecord[] {
+    return this.experimentHistory.slice(0, 5);
+  }
+
+  get currentParameterExplanation(): string {
+    const algorithm = this.activeConfig?.algorithm;
+    if (algorithm === 'kmeans') {
+      return 'K 值控制聚类中心数量；迭代次数影响中心更新是否充分。';
+    }
+    if (algorithm === 'q_learning') {
+      return 'epsilon 控制探索概率，gamma 控制未来奖励的重要性，学习率控制 Q 值更新幅度。';
+    }
+    if (algorithm === 'decision_tree' || algorithm === 'random_forest') {
+      return '最大深度和最小分裂样本数会影响树模型复杂度，过大可能导致过拟合。';
+    }
+    if (algorithm === 'svm' || algorithm === 'logistic_regression' || algorithm === 'linear_regression') {
+      return '学习率影响参数更新步长；正则化参数用于控制模型复杂度。';
+    }
+    return '选择算法后，这里会根据当前算法解释主要参数的含义。';
+  }
+
+  get currentOutputExplanation(): string {
+    const algorithm = this.activeConfig?.algorithm;
+    if (algorithm === 'kmeans') {
+      return '输出重点是聚类中心、簇分布、Inertia 与 Silhouette 等聚类质量指标。';
+    }
+    if (algorithm === 'pca') {
+      return '输出重点是二维投影、解释方差比例和重构误差。';
+    }
+    if (algorithm === 'q_learning') {
+      return '输出重点是策略路径、成功率、平均奖励和 Q 值变化。';
+    }
+    return '输出重点是 Loss、Accuracy、预测分布、决策边界和模型评价指标。';
+  }
+
   ngOnInit(): void {
+    this.syncPageFromHash();
+    this.applyResponsiveSidebarDefault();
     this.loadCatalogs();
+  }
+
+  @HostListener('window:hashchange')
+  handleHashChange(): void {
+    this.syncPageFromHash();
+  }
+
+  @HostListener('window:resize')
+  handleWindowResize(): void {
+    this.applyResponsiveSidebarDefault();
+  }
+
+  beginLearning(): void {
+    this.setPage(this.currentUser ? 'dashboard' : 'auth');
+  }
+
+  setPage(page: PageKey): void {
+    this.activePage = page;
+    if (typeof window !== 'undefined') {
+      window.history.replaceState(null, '', `#${page}`);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
+
+  toggleSidebar(): void {
+    this.sidebarCollapsed = !this.sidebarCollapsed;
+  }
+
+  private applyResponsiveSidebarDefault(): void {
+    if (typeof window !== 'undefined' && window.innerWidth <= 820) {
+      this.sidebarCollapsed = true;
+    }
+  }
+
+  selectPathNode(node: PathNode): void {
+    this.selectedPathNode = node;
+  }
+
+  labelFor(learningType: string): string {
+    return learningTypeLabels[learningType] ?? learningType;
+  }
+
+  handleRegister(): void {
+    if (!this.registerUsername.trim() || !this.registerEmail.trim() || !this.registerPassword) {
+      this.registerMessage = '请填写用户名、邮箱和密码。';
+      return;
+    }
+    if (this.registerPassword !== this.registerPasswordConfirm) {
+      this.registerMessage = '两次输入的密码不一致。';
+      return;
+    }
+    this.registerMessage = '注册表单已完成展示；当前后端尚未提供注册接口，请先使用 student / 123456 登录。';
   }
 
   handleLogin(user: UserProfile): void {
     this.currentUser = user;
     this.saveMessage = `欢迎回来，${user.displayName}。`;
     this.loadHistory();
+    this.setPage('dashboard');
   }
 
   handleLogout(): void {
     this.currentUser = null;
     this.experimentHistory = [];
     this.saveMessage = '已退出登录。';
+    this.setPage('home');
   }
 
   handleConfigChange(config: ExperimentConfig): void {
@@ -427,6 +2522,12 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
     this.experimentName = record.name;
     this.latestSessionId = record.latestSessionId ?? '';
     this.saveMessage = `已载入实验 ${record.name} 的配置。`;
+    this.setPage('lab');
+  }
+
+  applyCaseAndOpenLab(item: ExperimentCase): void {
+    this.applyCase(item);
+    this.setPage('lab');
   }
 
   applyCase(item: ExperimentCase): void {
@@ -459,6 +2560,26 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
       }
     });
     this.subscriptions.add(sub);
+  }
+
+  formatRecordParams(record: ExperimentRecord): string {
+    const params = this.readParams(record.config['params']);
+    const entries = Object.entries(params).slice(0, 2);
+    if (entries.length === 0) {
+      return '默认参数';
+    }
+    return entries.map(([key, value]) => `${key}: ${value}`).join(' / ');
+  }
+
+  private syncPageFromHash(): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const hash = window.location.hash.replace('#', '') as PageKey;
+    const allPages: PageKey[] = ['home', 'auth', ...this.appNavItems.map((item) => item.key)];
+    if (allPages.includes(hash)) {
+      this.activePage = hash;
+    }
   }
 
   private loadCatalogs(): void {
