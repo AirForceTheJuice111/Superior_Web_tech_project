@@ -159,17 +159,21 @@ const MAX_CSV_ROWS = 300;
     </section>
   `,
   styles: [`
+    :host { display: block; width: 100%; min-width: 0; }
     .card {
+      width: 100%;
+      min-width: 0;
       background: rgba(255,255,255,0.95);
-      border-radius: 28px;
-      padding: 32px 36px;
+      border-radius: 20px;
+      padding: clamp(18px, 1.8vw, 28px);
       box-shadow: 0 28px 60px rgba(15, 23, 42, 0.08);
       border: 1px solid rgba(255,255,255,0.8);
       backdrop-filter: blur(10px);
     }
-    .card-header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 26px; }
-    h2 { margin: 0 0 10px; font-size: 32px; color: #0f172a; }
-    p { margin: 0; color: #64748b; line-height: 1.8; font-size: 15px; }
+    .card-header { display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; margin-bottom: 20px; }
+    .card-header > div { min-width: 0; }
+    h2 { margin: 0 0 8px; font-size: clamp(22px, 1.8vw, 28px); color: #0f172a; }
+    p { margin: 0; color: #64748b; line-height: 1.7; font-size: 14px; }
     .badge {
       padding: 10px 16px;
       border-radius: 999px;
@@ -180,27 +184,27 @@ const MAX_CSV_ROWS = 300;
       box-shadow: inset 0 0 0 1px rgba(15, 118, 110, 0.08);
     }
     .placeholder { color: #64748b; font-size: 15px; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
     .field, .param-card label { display: flex; flex-direction: column; gap: 10px; font-weight: 700; color: #1e293b; }
     .field > span:first-child,
-    .param-card label > span:first-child { font-size: 17px; }
-    .field small { min-height: 48px; font-weight: 500; color: #64748b; line-height: 1.7; }
+    .param-card label > span:first-child { font-size: 15px; }
+    .field small { min-height: 0; font-weight: 500; color: #64748b; line-height: 1.6; }
     select, input[type='number'] {
       width: 100%;
-      min-height: 66px;
+      min-height: 50px;
       border: 1px solid #d7e1f0;
-      border-radius: 18px;
-      padding: 14px 18px;
+      border-radius: 12px;
+      padding: 11px 12px;
       background: rgba(255,255,255,0.98);
-      font-size: 18px;
+      font-size: 15px;
       font-weight: 700;
       color: #0f172a;
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.9);
     }
     .csv-panel {
-      margin-top: 24px;
-      padding: 20px;
-      border-radius: 22px;
+      margin-top: 18px;
+      padding: 16px;
+      border-radius: 18px;
       background: linear-gradient(180deg, #f8fbff, #ffffff);
       border: 1px solid #e2e8f0;
     }
@@ -214,7 +218,7 @@ const MAX_CSV_ROWS = 300;
     .csv-header h3 {
       margin: 0 0 8px;
       color: #0f172a;
-      font-size: 20px;
+      font-size: 18px;
     }
     .csv-badge {
       flex: 0 0 auto;
@@ -301,10 +305,11 @@ const MAX_CSV_ROWS = 300;
       height: 16px;
       accent-color: #2563eb;
     }
-    .param-grid { margin-top: 28px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
+    .param-grid { margin-top: 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; }
     .param-card {
-      padding: 22px 24px;
-      border-radius: 22px;
+      min-width: 0;
+      padding: 16px;
+      border-radius: 16px;
       background: linear-gradient(180deg, #f8fbff, #f8fafc);
       border: 1px solid #e5edf7;
       box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
@@ -315,21 +320,21 @@ const MAX_CSV_ROWS = 300;
       align-items: center;
       font-weight: 700;
       color: #1e293b;
-      min-height: 66px;
+      min-height: 50px;
       justify-content: center;
       border: 1px solid #d7e1f0;
-      border-radius: 18px;
+      border-radius: 12px;
       background: rgba(255,255,255,0.98);
     }
-    .footer { margin-top: 26px; display: flex; justify-content: flex-end; }
+    .footer { margin-top: 20px; display: flex; justify-content: flex-end; }
     button.primary {
       border: 0;
-      border-radius: 18px;
-      padding: 16px 28px;
-      min-width: 150px;
+      border-radius: 12px;
+      padding: 12px 22px;
+      min-width: 132px;
       background: linear-gradient(135deg, #3b82f6, #2563eb);
       color: #fff;
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 800;
       cursor: pointer;
       box-shadow: 0 20px 34px rgba(37, 99, 235, 0.24);

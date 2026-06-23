@@ -2,24 +2,59 @@
   box-sizing: border-box;
 }
 
+:root {
+  color-scheme: light;
+  --page-bg: #f7f7f4;
+  --surface: #ffffff;
+  --surface-muted: #f3f4f2;
+  --surface-subtle: #fafaf8;
+  --border: #e4e4df;
+  --border-strong: #d4d4ce;
+  --text: #111111;
+  --text-muted: #5f6368;
+  --text-subtle: #8a8d91;
+  --accent: #10a37f;
+  --accent-dark: #0f7f63;
+  --accent-soft: #e7f6f1;
+  --blue: #2563eb;
+  --blue-soft: #eef4ff;
+  --shadow-sm: 0 1px 2px rgba(17, 24, 39, 0.06);
+  --shadow-md: 0 12px 28px rgba(17, 24, 39, 0.08);
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --container: 1180px;
+}
+
 html {
-  /* 深空底色,作为星云背景层的兜底,避免加载瞬间的白屏闪烁 */
-  background: #05060f;
+  background: var(--page-bg);
+  scroll-behavior: smooth;
 }
 
 html,
 body {
   margin: 0;
   min-height: 100%;
-  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-  color: #1f2937;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: var(--text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 body {
   min-height: 100vh;
-  background: transparent;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(16, 163, 127, 0.05), transparent 28rem),
+    linear-gradient(180deg, #fbfbf9 0%, var(--page-bg) 42%, #f5f5f1 100%);
 }
 
 button,
@@ -37,16 +72,175 @@ textarea {
 }
 
 button {
-  transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease, border-color 0.18s ease;
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
 }
 
 button:hover:not(:disabled) {
-  transform: translateY(-1px);
+  transform: none;
 }
 
 input:focus,
 select:focus,
 textarea:focus {
-  border-color: #60a5fa !important;
-  box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.16);
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px rgba(16, 163, 127, 0.14) !important;
+}
+
+/* Design-system reset for the existing standalone feature components. */
+app-root .card,
+app-root .case-card,
+app-root .overview-card,
+app-root .case-item,
+app-root .metric-card,
+app-root .param-card,
+app-root .summary,
+app-root .summary-grid,
+app-root .chart-shell,
+app-root .guide-block,
+app-root .explain-block,
+app-root .stat-item,
+app-root .center-item,
+app-root .history-item,
+app-root .csv-panel,
+app-root .feature-engineering,
+app-root .empty,
+app-root .result-row {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-sm) !important;
+  backdrop-filter: none !important;
+}
+
+app-root .card-header h2,
+app-root .card-header h3,
+app-root h2,
+app-root h3,
+app-root h4 {
+  color: var(--text) !important;
+}
+
+app-root p,
+app-root small,
+app-root .hint,
+app-root .message,
+app-root .placeholder,
+app-root .empty,
+app-root .card-header p {
+  color: var(--text-muted) !important;
+}
+
+app-root .badge,
+app-root .csv-badge,
+app-root .ribbon-item,
+app-root .case-title span,
+app-root .hero-points span,
+app-root .hero-badges span,
+app-root .meta-row span,
+app-root .block-header span {
+  background: var(--surface-muted) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-muted) !important;
+  border-radius: 999px !important;
+  box-shadow: none !important;
+}
+
+app-root button,
+app-root button.primary,
+app-root button.success,
+app-root button.warning {
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+
+app-root button.primary,
+app-root button.success {
+  background: var(--text) !important;
+  border: 1px solid var(--text) !important;
+  color: #ffffff !important;
+}
+
+app-root button.warning {
+  background: #ffffff !important;
+  border: 1px solid var(--border-strong) !important;
+  color: var(--text) !important;
+}
+
+app-root button.primary:hover:not(:disabled),
+app-root button.success:hover:not(:disabled) {
+  background: #2f2f2f !important;
+  border-color: #2f2f2f !important;
+}
+
+app-root input,
+app-root select,
+app-root textarea {
+  background: #ffffff !important;
+  border: 1px solid var(--border-strong) !important;
+  border-radius: 10px !important;
+  color: var(--text) !important;
+  box-shadow: none !important;
+}
+
+app-root .json-card pre {
+  background: #111827 !important;
+  border-radius: 12px !important;
+  box-shadow: none !important;
+}
+
+/* Keep the AI assistant useful, but make it match the calm platform style. */
+app-ai-assistant .fab {
+  width: 52px !important;
+  height: 52px !important;
+  border-radius: 999px !important;
+  background: var(--text) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(17, 17, 17, 0.88) !important;
+  box-shadow: var(--shadow-md) !important;
+  animation: none !important;
+}
+
+app-ai-assistant .panel {
+  background: #ffffff !important;
+  color: var(--text) !important;
+  border-left: 1px solid var(--border) !important;
+  box-shadow: -18px 0 42px rgba(17, 24, 39, 0.10) !important;
+  backdrop-filter: none !important;
+}
+
+app-ai-assistant .head,
+app-ai-assistant .composer {
+  border-color: var(--border) !important;
+}
+
+app-ai-assistant .title,
+app-ai-assistant .welcome,
+app-ai-assistant .acts button,
+app-ai-assistant .msg:not(.user) .bubble {
+  color: var(--text) !important;
+}
+
+app-ai-assistant .title small,
+app-ai-assistant .welcome,
+app-ai-assistant .composer textarea::placeholder {
+  color: var(--text-muted) !important;
+}
+
+app-ai-assistant .dot {
+  background: var(--accent) !important;
+  box-shadow: none !important;
+}
+
+app-ai-assistant .acts button,
+app-ai-assistant .chip,
+app-ai-assistant .composer textarea,
+app-ai-assistant .msg:not(.user) .bubble {
+  background: var(--surface-muted) !important;
+  border: 1px solid var(--border) !important;
+}
+
+app-ai-assistant .msg.user .bubble,
+app-ai-assistant .send {
+  background: var(--text) !important;
+  color: #ffffff !important;
 }

@@ -21,8 +21,10 @@ import * as echarts from 'echarts';
     </section>
   `,
   styles: [`
-    .card { background: rgba(255,255,255,0.94); border-radius: 24px; padding: 22px; box-shadow: 0 24px 48px rgba(15, 23, 42, 0.08); border: 1px solid rgba(255,255,255,0.8); }
+    :host { display: block; width: 100%; min-width: 0; }
+    .card { width: 100%; min-width: 0; background: rgba(255,255,255,0.94); border-radius: 20px; padding: 20px; box-shadow: 0 24px 48px rgba(15, 23, 42, 0.08); border: 1px solid rgba(255,255,255,0.8); }
     .card-header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 16px; }
+    .card-header > div { min-width: 0; }
     h3 { margin: 0 0 8px; font-size: 20px; }
     p { margin: 0; color: #64748b; line-height: 1.7; }
     .badge { padding: 8px 14px; border-radius: 999px; background: linear-gradient(135deg, #f8fafc, #eef2ff); color: #475569; font-size: 12px; font-weight: 800; }
@@ -31,8 +33,9 @@ import * as echarts from 'echarts';
       padding: 12px;
       background: linear-gradient(180deg, #f8fbff, #ffffff);
       border: 1px solid #e2e8f0;
+      min-width: 0;
     }
-    .chart-container { width: 100%; height: 280px; }
+    .chart-container { width: 100%; min-width: 0; height: 280px; }
   `]
 })
 export class MetricTrendChartComponent implements AfterViewInit, OnChanges, OnDestroy {
@@ -44,9 +47,14 @@ export class MetricTrendChartComponent implements AfterViewInit, OnChanges, OnDe
   @ViewChild('chartContainer') chartContainer!: ElementRef<HTMLDivElement>;
 
   private chartInstance: echarts.ECharts | null = null;
+  private resizeObserver: ResizeObserver | null = null;
 
   ngAfterViewInit(): void {
     this.chartInstance = echarts.init(this.chartContainer.nativeElement);
+    if (typeof ResizeObserver !== 'undefined') {
+      this.resizeObserver = new ResizeObserver(() => this.chartInstance?.resize());
+      this.resizeObserver.observe(this.chartContainer.nativeElement);
+    }
     this.renderChart();
     window.addEventListener('resize', this.handleResize);
   }
@@ -59,6 +67,7 @@ export class MetricTrendChartComponent implements AfterViewInit, OnChanges, OnDe
 
   ngOnDestroy(): void {
     window.removeEventListener('resize', this.handleResize);
+    this.resizeObserver?.disconnect();
     this.chartInstance?.dispose();
   }
 

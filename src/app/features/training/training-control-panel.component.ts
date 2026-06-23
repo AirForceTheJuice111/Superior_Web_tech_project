@@ -124,25 +124,30 @@ import { ModelExplanationPanelComponent } from './model-explanation-panel.compon
     </section>
   `,
   styles: [`
-    .card { background: rgba(255,255,255,0.94); border-radius: 24px; padding: 24px; box-shadow: 0 24px 48px rgba(15, 23, 42, 0.08); margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.8); }
+    :host { display: grid; gap: 18px; width: 100%; min-width: 0; }
+    :host > * { min-width: 0; }
+    .card { width: 100%; min-width: 0; background: rgba(255,255,255,0.94); border-radius: 20px; padding: 22px; box-shadow: 0 24px 48px rgba(15, 23, 42, 0.08); margin-bottom: 0; border: 1px solid rgba(255,255,255,0.8); }
     .card-header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+    .card-header > div { min-width: 0; }
     h2 { margin: 0 0 8px; font-size: 26px; }
     h3 { margin: 0; }
     p { margin: 0; color: #64748b; line-height: 1.7; }
     .badge { padding: 8px 14px; border-radius: 999px; background: #f1f5f9; color: #475569; font-size: 12px; font-weight: 800; text-transform: uppercase; }
     .badge.running { background: #dcfce7; color: #15803d; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 16px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-top: 16px; }
     .field { display: flex; flex-direction: column; gap: 8px; font-weight: 600; color: #334155; }
     .field input { border: 1px solid #dbe2ea; border-radius: 14px; padding: 12px 14px; background: rgba(255,255,255,0.98); }
     .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
+    .actions button { flex: 0 1 auto; }
     button { border: 1px solid #cbd5f5; background: #fff; color: #1f2937; padding: 11px 16px; border-radius: 14px; cursor: pointer; font-weight: 700; }
     button.primary { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; border-color: #2563eb; }
     button.success { background: linear-gradient(135deg, #10b981, #059669); color: #fff; border-color: #10b981; }
     button.warning { background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; border-color: #f59e0b; }
     button:disabled { opacity: 0.6; cursor: not-allowed; }
-    .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-top: 16px; padding: 14px; border-radius: 16px; background: linear-gradient(180deg, #f8fbff, #f8fafc); border: 1px solid #e2e8f0; }
+    .summary { display: grid; grid-template-columns: minmax(220px, 2fr) repeat(3, minmax(110px, 1fr)); gap: 12px; margin-top: 16px; padding: 14px; border-radius: 16px; background: linear-gradient(180deg, #f8fbff, #f8fafc); border: 1px solid #e2e8f0; }
+    .summary > div { min-width: 0; }
     .summary strong { display: block; font-size: 12px; color: #64748b; }
-    .summary span { font-size: 15px; font-weight: 600; }
+    .summary span { display: block; min-width: 0; overflow-wrap: anywhere; word-break: break-word; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
     .status-ribbon {
       display: flex;
       flex-wrap: wrap;
@@ -160,8 +165,19 @@ import { ModelExplanationPanelComponent } from './model-explanation-panel.compon
       font-size: 13px;
       font-weight: 700;
     }
-    .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+    .metrics-grid { display: grid; grid-template-columns: repeat(2, minmax(280px, 1fr)); gap: 16px; min-width: 0; }
+    .metrics-grid > * { min-width: 0; }
     .json-card pre { margin: 0; background: linear-gradient(180deg, #0f172a, #111827); color: #e2e8f0; padding: 18px; border-radius: 16px; overflow: auto; font-size: 12px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); }
+    @media (max-width: 900px) {
+      .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 720px) {
+      .metrics-grid { grid-template-columns: 1fr; }
+      .card-header { flex-direction: column; }
+    }
+    @media (max-width: 560px) {
+      .summary { grid-template-columns: 1fr; }
+    }
   `]
 })
 export class TrainingControlPanelComponent implements OnDestroy {

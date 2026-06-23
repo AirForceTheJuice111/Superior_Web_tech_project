@@ -45,12 +45,19 @@ interface ClassificationSummary {
     </section>
   `,
   styles: [`
+    :host {
+      display: block;
+      width: 100%;
+      min-width: 0;
+    }
     .card {
+      width: 100%;
+      min-width: 0;
       background: rgba(255,255,255,0.94);
-      border-radius: 24px;
-      padding: 24px;
+      border-radius: 20px;
+      padding: 22px;
       box-shadow: 0 24px 48px rgba(15, 23, 42, 0.08);
-      margin-bottom: 20px;
+      margin-bottom: 0;
       border: 1px solid rgba(255,255,255,0.8);
     }
     .card-header {
@@ -59,6 +66,9 @@ interface ClassificationSummary {
       gap: 16px;
       align-items: flex-start;
       margin-bottom: 18px;
+    }
+    .card-header > div {
+      min-width: 0;
     }
     h3 {
       margin: 0 0 8px;
@@ -81,13 +91,15 @@ interface ClassificationSummary {
     }
     .metric-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
       gap: 14px;
+      min-width: 0;
     }
     .metric-card {
       display: flex;
       flex-direction: column;
       gap: 8px;
+      min-width: 0;
       min-height: 136px;
       padding: 18px;
       border-radius: 20px;
