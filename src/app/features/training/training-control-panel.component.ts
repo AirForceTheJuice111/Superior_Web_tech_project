@@ -40,11 +40,14 @@ import { ModelExplanationPanelComponent } from './model-explanation-panel.compon
 
       <div class="actions">
         <button class="primary" (click)="handleInit()" [disabled]="loading.init || !config">初始化</button>
-        <button (click)="handleStep()" [disabled]="!sessionId || loading.step || isRunning">单步执行</button>
-        <button class="success" (click)="startAutoRun()" [disabled]="!sessionId || isRunning">自动训练</button>
+        <button (click)="handleStep()" [disabled]="!sessionId || loading.step || isRunning || isTerminal">单步执行</button>
+        <button class="success" (click)="startAutoRun()" [disabled]="!sessionId || isRunning || isTerminal">自动训练</button>
         <button class="warning" (click)="pause()" [disabled]="!sessionId || !isRunning">暂停</button>
         <button (click)="refreshStatus()" [disabled]="!sessionId || loading.status">刷新状态</button>
       </div>
+
+      <p class="train-error" *ngIf="errorMessage" role="alert">⚠ {{ errorMessage }}</p>
+      <p class="train-hint" *ngIf="isTerminal && !errorMessage">本轮训练已{{ statusLabel }}，如需继续请重新「初始化」。</p>
 
       <div class="summary">
         <div>
@@ -144,6 +147,8 @@ import { ModelExplanationPanelComponent } from './model-explanation-panel.compon
     button.success { background: linear-gradient(135deg, #10b981, #059669); color: #fff; border-color: #10b981; }
     button.warning { background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; border-color: #f59e0b; }
     button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .train-error { margin: 12px 0 0; color: #b91c1c; font-weight: 700; font-size: 14px; }
+    .train-hint { margin: 12px 0 0; color: #475569; font-size: 13px; }
     .summary { display: grid; grid-template-columns: minmax(220px, 2fr) repeat(3, minmax(110px, 1fr)); gap: 12px; margin-top: 16px; padding: 14px; border-radius: 16px; background: linear-gradient(180deg, #f8fbff, #f8fafc); border: 1px solid #e2e8f0; }
     .summary > div { min-width: 0; }
     .summary strong { display: block; font-size: 12px; color: #64748b; }
@@ -188,6 +193,7 @@ export class TrainingControlPanelComponent implements OnDestroy {
   maxSteps = 50;
   intervalMs = 800;
   isRunning = false;
+  errorMessage: string | null = null;
   loading = {
     init: false,
     step: false,
@@ -241,6 +247,24 @@ export class TrainingControlPanelComponent implements OnDestroy {
     return typeof accuracy === 'number' ? accuracy : null;
   }
 
+  get isTerminal(): boolean {
+    return ['completed', 'stopped', 'failed'].includes(this.trainingState.status);
+  }
+
+  get statusLabel(): string {
+    switch (this.trainingState.status) {
+      case 'completed': return '完成';
+      case 'stopped': return '停止';
+      case 'failed': return '失败';
+      default: return this.trainingState.status;
+    }
+  }
+
+  private toMessage(err: unknown, fallback: string): string {
+    const message = err instanceof Error ? err.message : '';
+    return message || fallback;
+  }
+
   handleInit(): void {
     if (!this.config) {
       return;
@@ -248,6 +272,7 @@ export class TrainingControlPanelComponent implements OnDestroy {
 
     this.clearTimer();
     this.loading.init = true;
+    this.errorMessage = null;
     this.lossHistory = [];
     this.accuracyHistory = [];
 
@@ -261,8 +286,9 @@ export class TrainingControlPanelComponent implements OnDestroy {
         this.emitSessionChange();
         this.refreshStatus();
       },
-      error: () => {
+      error: (err) => {
         this.loading.init = false;
+        this.errorMessage = this.toMessage(err, '训练初始化失败，请稍后重试');
       },
       complete: () => {
         this.loading.init = false;
@@ -276,11 +302,13 @@ export class TrainingControlPanelComponent implements OnDestroy {
       return;
     }
     this.loading.step = true;
+    this.errorMessage = null;
     const sub = this.trainingApi.stepTraining(this.sessionId, 1).subscribe({
       next: (data) => this.applyStatus(data),
-      error: () => {
+      error: (err) => {
         this.loading.step = false;
         this.clearTimer();
+        this.errorMessage = this.toMessage(err, '单步训练失败');
       },
       complete: () => {
         this.loading.step = false;
@@ -294,6 +322,7 @@ export class TrainingControlPanelComponent implements OnDestroy {
       return;
     }
     this.isRunning = true;
+    this.errorMessage = null;
     this.timerId = setInterval(() => {
       if (!this.sessionId || this.loading.step) {
         return;
@@ -301,7 +330,11 @@ export class TrainingControlPanelComponent implements OnDestroy {
       this.loading.step = true;
       const sub = this.trainingApi.stepTraining(this.sessionId, 1).subscribe({
         next: (data) => this.applyStatus(data),
-        error: () => this.clearTimer(),
+        error: (err) => {
+          this.loading.step = false;
+          this.clearTimer();
+          this.errorMessage = this.toMessage(err, '自动训练已中断');
+        },
         complete: () => {
           this.loading.step = false;
         }
@@ -320,6 +353,9 @@ export class TrainingControlPanelComponent implements OnDestroy {
         this.trainingState.status = data.status;
         this.emitSessionChange();
         this.refreshStatus();
+      },
+      error: (err) => {
+        this.errorMessage = this.toMessage(err, '暂停失败');
       }
     });
     this.subscriptions.add(sub);

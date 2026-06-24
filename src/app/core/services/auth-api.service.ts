@@ -11,4 +11,8 @@ export class AuthApiService {
   login(payload: LoginRequest): Observable<UserProfile> {
     return this.apiClient.post<UserProfile>('/auth/login', payload);
   }
+
+  register(payload: { username: string; email: string; password: string }): Observable<UserProfile> {
+    return this.apiClient.post<UserProfile>('/auth/register', payload);
+  }
 }

@@ -43,8 +43,8 @@ import { AuthApiService } from '../../core/services/auth-api.service';
             <span>{{ user?.username }}</span>
           </div>
           <div>
-            <strong>Token</strong>
-            <span>{{ user?.token }}</span>
+            <strong>会话状态</strong>
+            <span>已建立安全会话</span>
           </div>
         </div>
         <div class="actions">

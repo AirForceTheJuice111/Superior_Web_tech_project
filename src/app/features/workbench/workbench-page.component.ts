@@ -3,11 +3,14 @@ import { Component, HostListener, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Subscription, forkJoin } from 'rxjs';
 
-import { AlgorithmMeta, CustomDatasetPayload, DatasetMeta, ExperimentCase, ExperimentConfig, ExperimentRecord, LearningType, ParamValue, TrainingSessionSummary, UserProfile } from '../../core/models/platform.models';
+import { AlgorithmMeta, CustomDatasetPayload, DatasetMeta, ExperimentCase, ExperimentConfig, ExperimentRecord, LearningType, ParamValue, QuizOverviewItem, QuizQuestion, QuizSubmitDetail, QuizSubmitResult, TrainingSessionSummary, UserProfile } from '../../core/models/platform.models';
 import { CatalogApiService } from '../../core/services/catalog-api.service';
+import { QuizApiService } from '../../core/services/quiz-api.service';
 import { ExperimentContextService } from '../../core/services/experiment-context.service';
 import { ExperimentCaseApiService } from '../../core/services/experiment-case-api.service';
 import { ExperimentApiService } from '../../core/services/experiment-api.service';
+import { AuthApiService } from '../../core/services/auth-api.service';
+import { AuthSessionService } from '../../core/services/auth-session.service';
 import { LoginPanelComponent } from '../auth/login-panel.component';
 import { ExperimentCaseLibraryPanelComponent } from '../cases/experiment-case-library-panel.component';
 import { ModelComparisonPanelComponent } from '../comparison/model-comparison-panel.component';
@@ -408,7 +411,7 @@ const learningTypeLabels: Record<string, string> = {
                   </div>
                   <div class="path-actions">
                     <button class="primary-action" type="button" (click)="setPage('lab')">进入推荐实验</button>
-                    <button class="ghost-action" type="button" (click)="setPage('quiz')">查看相关练习</button>
+                    <button class="ghost-action" type="button" (click)="openRelatedQuiz(selectedPathNode)">查看相关练习</button>
                   </div>
                 </aside>
               </div>
@@ -607,15 +610,107 @@ const learningTypeLabels: Record<string, string> = {
             </section>
 
             <section *ngSwitchCase="'quiz'" class="quiz-page">
-              <section class="quiz-grid">
-                <article class="quiz-card" *ngFor="let item of practiceItems">
-                  <span>{{ item.level }}</span>
-                  <h3>{{ item.title }}</h3>
-                  <p>{{ item.description }}</p>
-                  <div class="tag-row">
-                    <small *ngFor="let tag of item.tags">{{ tag }}</small>
+              <nav class="quiz-breadcrumb">
+                <button type="button" [class.current]="quizView === 'categories'" (click)="openQuizCategories()">练习题</button>
+                <ng-container *ngIf="quizSelectedGroup">
+                  <span class="sep">/</span>
+                  <button type="button" [class.current]="quizView === 'topics'" (click)="backToQuizTopics()">{{ quizSelectedGroup.title }}</button>
+                </ng-container>
+                <ng-container *ngIf="quizView === 'questions' && quizSelectedNode">
+                  <span class="sep">/</span>
+                  <button type="button" class="current" disabled>{{ quizSelectedNode.title }}</button>
+                </ng-container>
+              </nav>
+
+              <!-- 第一级:课程大类 -->
+              <section class="content-card" *ngIf="quizView === 'categories'">
+                <div class="section-heading">
+                  <span>Quiz</span>
+                  <h2>选择练习方向</h2>
+                  <p>按课程路径的大类逐级进入专题练习，完成测验后会记录每个专题的最佳成绩。</p>
+                </div>
+                <div class="quiz-category-grid">
+                  <button class="quiz-category-card" type="button" *ngFor="let group of pathGroups" (click)="openQuizGroup(group)">
+                    <strong>{{ group.title }}</strong>
+                    <small>{{ group.nodes.length }} 个专题 · 已测验 {{ groupSolvedCount(group) }}/{{ group.nodes.length }}</small>
+                    <span class="enter">进入 →</span>
+                  </button>
+                </div>
+              </section>
+
+              <!-- 第二级:专题入口(带成绩) -->
+              <section class="content-card" *ngIf="quizView === 'topics' && quizSelectedGroup">
+                <div class="section-heading">
+                  <span>{{ quizSelectedGroup.title }}</span>
+                  <h2>选择专题开始练习</h2>
+                  <p>每个专题为一组单选题，提交后即时判分；右侧显示你的最佳成绩。</p>
+                </div>
+                <p class="empty-state" *ngIf="quizOverviewLoading">正在加载练习成绩...</p>
+                <div class="quiz-topic-list">
+                  <button class="quiz-topic-row" type="button" *ngFor="let node of quizSelectedGroup.nodes"
+                          [disabled]="topicQuestionCount(node.id) === 0" (click)="openQuizTopic(node)">
+                    <div class="quiz-topic-main">
+                      <strong>{{ node.title }}</strong>
+                      <small>{{ node.practice }}</small>
+                    </div>
+                    <div class="quiz-topic-meta">
+                      <span class="quiz-count">{{ topicQuestionCount(node.id) }} 题</span>
+                      <span class="quiz-badge" [class.done]="topicBestScore(node.id) !== null">
+                        {{ topicBestScore(node.id) !== null ? topicBestScore(node.id) + ' 分' : '未测验' }}
+                      </span>
+                    </div>
+                  </button>
+                </div>
+              </section>
+
+              <!-- 第三级:试题作答 -->
+              <section class="content-card" *ngIf="quizView === 'questions' && quizSelectedNode">
+                <div class="quiz-question-head">
+                  <button class="ghost-action" type="button" (click)="backToQuizTopics()">← 返回专题</button>
+                  <div>
+                    <h2>{{ quizSelectedNode.title }}</h2>
+                    <small>{{ quizQuestions.length }} 道单选题</small>
                   </div>
-                </article>
+                </div>
+
+                <p class="empty-state" *ngIf="quizQuestionsLoading">正在加载题目...</p>
+                <p class="empty-state" *ngIf="!quizQuestionsLoading && quizQuestions.length === 0">该专题暂无练习题。</p>
+
+                <div class="quiz-score-banner" *ngIf="quizResult">
+                  <strong>{{ quizResult.score }} 分</strong>
+                  <span>答对 {{ quizResult.correctCount }} / {{ quizResult.total }}</span>
+                  <span *ngIf="quizResult.persisted && quizResult.bestScore !== null">历史最佳 {{ quizResult.bestScore }} 分</span>
+                  <span class="hint" *ngIf="!quizResult.persisted">登录后可记录成绩</span>
+                </div>
+
+                <div class="quiz-question-list" *ngIf="!quizQuestionsLoading && quizQuestions.length > 0">
+                  <article class="quiz-question-card" *ngFor="let q of quizQuestions; let qi = index"
+                           [class.correct]="quizResult && quizResultByQuestion[q.id].correct === true"
+                           [class.wrong]="quizResult && quizResultByQuestion[q.id].correct === false">
+                    <h3>{{ qi + 1 }}. {{ q.question }}</h3>
+                    <label class="quiz-option" *ngFor="let opt of q.options; let oi = index"
+                           [class.chosen]="quizAnswers[q.id] === oi"
+                           [class.answer]="quizResult && quizResultByQuestion[q.id].correctIndex === oi"
+                           [class.miss]="quizResult && quizAnswers[q.id] === oi && quizResultByQuestion[q.id].correct === false">
+                      <input type="radio" [name]="'quiz-q-' + q.id" [checked]="quizAnswers[q.id] === oi"
+                             [disabled]="!!quizResult" (change)="selectQuizOption(q.id, oi)" />
+                      <span>{{ optionLetter(oi) }}. {{ opt }}</span>
+                    </label>
+                    <p class="quiz-explanation" *ngIf="quizResult && quizResultByQuestion[q.id].explanation">
+                      解析：{{ quizResultByQuestion[q.id].explanation }}
+                    </p>
+                  </article>
+                </div>
+
+                <div class="quiz-actions" *ngIf="!quizQuestionsLoading && quizQuestions.length > 0">
+                  <button class="primary-action" type="button" *ngIf="!quizResult"
+                          [disabled]="quizSubmitting || !allQuizAnswered()" (click)="submitQuiz()">
+                    {{ quizSubmitting ? '提交中...' : (allQuizAnswered() ? '提交并查看得分' : '请先完成所有题目') }}
+                  </button>
+                  <button class="primary-action" type="button" *ngIf="quizResult" (click)="retryQuiz()">再做一次</button>
+                  <button class="ghost-action" type="button" *ngIf="quizResult" (click)="backToQuizTopics()">返回专题</button>
+                </div>
+                <p class="quiz-message" *ngIf="quizMessage">{{ quizMessage }}</p>
               </section>
             </section>
 
@@ -1821,6 +1916,284 @@ const learningTypeLabels: Record<string, string> = {
       gap: 12px;
     }
 
+    /* ---- 练习题三级下钻 ---- */
+    .quiz-page {
+      display: grid;
+      gap: 16px;
+    }
+
+    .quiz-breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .quiz-breadcrumb button {
+      border: none;
+      background: transparent;
+      padding: 4px 6px;
+      border-radius: 8px;
+      font-size: 13px;
+      color: var(--text-muted, #6b7280);
+      cursor: pointer;
+    }
+
+    .quiz-breadcrumb button:not(:disabled):hover {
+      color: var(--text, #1c2024);
+      background: var(--surface-subtle, #f3f4f6);
+    }
+
+    .quiz-breadcrumb button.current {
+      color: var(--text, #1c2024);
+      font-weight: 800;
+      cursor: default;
+    }
+
+    .quiz-breadcrumb .sep {
+      color: var(--border-strong, #cbd5e1);
+    }
+
+    .quiz-category-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .quiz-category-card {
+      display: grid;
+      gap: 6px;
+      text-align: left;
+      padding: 18px;
+      border: 1px solid var(--border-strong, #e5e7eb);
+      border-radius: 16px;
+      background: #ffffff;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    }
+
+    .quiz-category-card:hover {
+      transform: translateY(-2px);
+      border-color: #34a07a;
+      box-shadow: 0 10px 24px rgba(16, 24, 40, 0.08);
+    }
+
+    .quiz-category-card strong {
+      font-size: 17px;
+      color: var(--text, #1c2024);
+    }
+
+    .quiz-category-card small {
+      color: var(--text-muted, #6b7280);
+    }
+
+    .quiz-category-card .enter {
+      margin-top: 6px;
+      font-size: 13px;
+      font-weight: 800;
+      color: #2f8f6c;
+    }
+
+    .quiz-topic-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .quiz-topic-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 14px 16px;
+      border: 1px solid var(--border-strong, #e5e7eb);
+      border-radius: 14px;
+      background: #ffffff;
+      cursor: pointer;
+      text-align: left;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .quiz-topic-row:not(:disabled):hover {
+      border-color: #34a07a;
+      box-shadow: 0 8px 18px rgba(16, 24, 40, 0.06);
+    }
+
+    .quiz-topic-row:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .quiz-topic-main {
+      display: grid;
+      gap: 4px;
+    }
+
+    .quiz-topic-main strong {
+      font-size: 15px;
+      color: var(--text, #1c2024);
+    }
+
+    .quiz-topic-main small {
+      color: var(--text-muted, #6b7280);
+    }
+
+    .quiz-topic-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    .quiz-count {
+      font-size: 12px;
+      color: var(--text-muted, #6b7280);
+    }
+
+    .quiz-badge {
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      background: var(--surface-subtle, #f3f4f6);
+      color: var(--text-muted, #6b7280);
+      white-space: nowrap;
+    }
+
+    .quiz-badge.done {
+      background: #e7f5ef;
+      color: #1f7a57;
+    }
+
+    .quiz-question-head {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 12px;
+    }
+
+    .quiz-question-head h2 {
+      margin: 0;
+      font-size: 19px;
+    }
+
+    .quiz-question-head small {
+      color: var(--text-muted, #6b7280);
+    }
+
+    .quiz-score-banner {
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+      flex-wrap: wrap;
+      padding: 14px 18px;
+      border-radius: 14px;
+      background: #e7f5ef;
+      border: 1px solid #bfe3d2;
+      margin-bottom: 16px;
+    }
+
+    .quiz-score-banner strong {
+      font-size: 24px;
+      color: #1f7a57;
+    }
+
+    .quiz-score-banner span {
+      color: #2f6b55;
+      font-size: 14px;
+    }
+
+    .quiz-score-banner .hint {
+      color: var(--text-muted, #6b7280);
+    }
+
+    .quiz-question-list {
+      display: grid;
+      gap: 14px;
+    }
+
+    .quiz-question-card {
+      display: grid;
+      gap: 8px;
+      padding: 16px;
+      border: 1px solid var(--border-strong, #e5e7eb);
+      border-left: 4px solid var(--border-strong, #e5e7eb);
+      border-radius: 14px;
+      background: #ffffff;
+    }
+
+    .quiz-question-card.correct {
+      border-left-color: #34a07a;
+    }
+
+    .quiz-question-card.wrong {
+      border-left-color: #e05656;
+    }
+
+    .quiz-question-card h3 {
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.5;
+      color: var(--text, #1c2024);
+    }
+
+    .quiz-option {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--border-strong, #e5e7eb);
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 14px;
+      color: var(--text, #1c2024);
+      transition: border-color 0.12s ease, background 0.12s ease;
+    }
+
+    .quiz-option:hover {
+      border-color: #94a3b8;
+    }
+
+    .quiz-option.chosen {
+      border-color: #34a07a;
+      background: #f1faf6;
+    }
+
+    .quiz-option.answer {
+      border-color: #34a07a;
+      background: #e7f5ef;
+    }
+
+    .quiz-option.miss {
+      border-color: #e05656;
+      background: #fdecec;
+    }
+
+    .quiz-option input {
+      accent-color: #2f8f6c;
+    }
+
+    .quiz-explanation {
+      margin: 4px 0 0;
+      padding-top: 8px;
+      border-top: 1px dashed var(--border-strong, #e5e7eb);
+      color: var(--text-muted, #6b7280);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .quiz-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 18px;
+      flex-wrap: wrap;
+    }
+
+    .quiz-message {
+      margin-top: 12px;
+      color: #c0392b;
+      font-size: 14px;
+    }
+
     .empty-state {
       padding: 18px;
       border: 1px dashed var(--border-strong);
@@ -2210,6 +2583,20 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
   sidebarCollapsed = false;
   selectedPathNode: PathNode = this.pathGroups[0].nodes[0];
 
+  // 练习题三级下钻状态:大类 -> 专题 -> 试题
+  quizView: 'categories' | 'topics' | 'questions' = 'categories';
+  quizSelectedGroup: PathGroup | null = null;
+  quizSelectedNode: PathNode | null = null;
+  quizOverview: QuizOverviewItem[] = [];
+  quizOverviewLoading = false;
+  quizQuestions: QuizQuestion[] = [];
+  quizQuestionsLoading = false;
+  quizAnswers: Record<number, number> = {};
+  quizResult: QuizSubmitResult | null = null;
+  quizResultByQuestion: Record<number, QuizSubmitDetail> = {};
+  quizSubmitting = false;
+  quizMessage = '';
+
   algorithms: AlgorithmMeta[] = [];
   datasets: DatasetMeta[] = [];
   experimentCases: ExperimentCase[] = [];
@@ -2230,7 +2617,10 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
     private readonly catalogApi: CatalogApiService,
     private readonly experimentCaseApi: ExperimentCaseApiService,
     private readonly experimentApi: ExperimentApiService,
-    private readonly experimentContext: ExperimentContextService
+    private readonly experimentContext: ExperimentContextService,
+    private readonly authApi: AuthApiService,
+    private readonly authSession: AuthSessionService,
+    private readonly quizApi: QuizApiService
   ) {}
 
   get currentPageMeta(): PageMeta {
@@ -2349,9 +2739,19 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    this.restoreSession();
     this.syncPageFromHash();
     this.applyResponsiveSidebarDefault();
     this.loadCatalogs();
+  }
+
+  /** 刷新后从持久化会话恢复登录态,使 Authorization 头与 currentUser 保持一致。 */
+  private restoreSession(): void {
+    const user = this.authSession.user;
+    if (user) {
+      this.currentUser = user;
+      this.loadHistory();
+    }
   }
 
   @HostListener('window:hashchange')
@@ -2370,6 +2770,9 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
 
   setPage(page: PageKey): void {
     this.activePage = page;
+    if (page === 'quiz') {
+      this.prepareQuizEntry();
+    }
     if (typeof window !== 'undefined') {
       window.history.replaceState(null, '', `#${page}`);
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2390,6 +2793,176 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
     this.selectedPathNode = node;
   }
 
+  // ----- 练习题(Quiz)-----
+
+  /** 从课程路径“查看相关练习”深链直接进入该专题的试题。 */
+  openRelatedQuiz(node: PathNode): void {
+    const group = this.pathGroups.find((g) => g.nodes.some((n) => n.id === node.id)) ?? null;
+    this.quizSelectedGroup = group;
+    this.activePage = 'quiz';
+    if (typeof window !== 'undefined') {
+      window.history.replaceState(null, '', '#quiz');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    this.loadQuizOverview();
+    this.openQuizTopic(node);
+  }
+
+  /** 进入练习页时重置到大类视图并刷新成绩概览。 */
+  private prepareQuizEntry(): void {
+    this.quizView = 'categories';
+    this.quizSelectedGroup = null;
+    this.quizSelectedNode = null;
+    this.clearQuizAttempt();
+    this.loadQuizOverview();
+  }
+
+  openQuizCategories(): void {
+    this.quizView = 'categories';
+    this.quizSelectedGroup = null;
+    this.quizSelectedNode = null;
+    this.clearQuizAttempt();
+  }
+
+  openQuizGroup(group: PathGroup): void {
+    this.quizSelectedGroup = group;
+    this.quizSelectedNode = null;
+    this.quizView = 'topics';
+    this.clearQuizAttempt();
+  }
+
+  backToQuizTopics(): void {
+    if (this.quizSelectedGroup) {
+      this.quizView = 'topics';
+    } else {
+      this.quizView = 'categories';
+    }
+    this.clearQuizAttempt();
+  }
+
+  openQuizTopic(node: PathNode): void {
+    this.quizSelectedNode = node;
+    this.quizView = 'questions';
+    this.clearQuizAttempt();
+    this.quizQuestionsLoading = true;
+    const sub = this.quizApi.listQuestions(node.id).subscribe({
+      next: (questions) => {
+        this.quizQuestions = questions;
+        this.quizQuestionsLoading = false;
+      },
+      error: (error: unknown) => {
+        this.quizQuestions = [];
+        this.quizQuestionsLoading = false;
+        this.quizMessage = error instanceof Error ? error.message : '题目加载失败,请稍后重试。';
+      }
+    });
+    this.subscriptions.add(sub);
+  }
+
+  selectQuizOption(questionId: number, optionIndex: number): void {
+    if (this.quizResult) {
+      return;
+    }
+    this.quizAnswers = { ...this.quizAnswers, [questionId]: optionIndex };
+  }
+
+  allQuizAnswered(): boolean {
+    return this.quizQuestions.length > 0
+      && this.quizQuestions.every((q) => this.quizAnswers[q.id] !== undefined && this.quizAnswers[q.id] !== null);
+  }
+
+  submitQuiz(): void {
+    if (!this.quizSelectedNode || this.quizSubmitting || !this.allQuizAnswered()) {
+      return;
+    }
+    this.quizSubmitting = true;
+    this.quizMessage = '';
+    const answers = this.quizQuestions.map((q) => ({
+      questionId: q.id,
+      selectedIndex: this.quizAnswers[q.id] ?? null
+    }));
+    const sub = this.quizApi.submit({ topicId: this.quizSelectedNode.id, answers }).subscribe({
+      next: (result) => {
+        this.quizResult = result;
+        this.quizResultByQuestion = {};
+        for (const detail of result.details) {
+          this.quizResultByQuestion[detail.questionId] = detail;
+        }
+        this.applyQuizScoreToOverview(result);
+        this.quizSubmitting = false;
+        if (typeof window !== 'undefined') {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      },
+      error: (error: unknown) => {
+        this.quizSubmitting = false;
+        this.quizMessage = error instanceof Error ? error.message : '提交失败,请稍后重试。';
+      }
+    });
+    this.subscriptions.add(sub);
+  }
+
+  retryQuiz(): void {
+    this.clearQuizAttempt();
+  }
+
+  optionLetter(index: number): string {
+    return ['A', 'B', 'C', 'D', 'E', 'F'][index] ?? String(index + 1);
+  }
+
+  topicQuestionCount(topicId: string): number {
+    return this.findQuizOverview(topicId)?.questionCount ?? 0;
+  }
+
+  topicBestScore(topicId: string): number | null {
+    const item = this.findQuizOverview(topicId);
+    return item && item.bestScore !== null && item.bestScore !== undefined ? item.bestScore : null;
+  }
+
+  groupSolvedCount(group: PathGroup): number {
+    return group.nodes.filter((node) => this.topicBestScore(node.id) !== null).length;
+  }
+
+  /** 仅清空一次作答的状态(答案/判分结果),不触发网络请求。 */
+  private clearQuizAttempt(): void {
+    this.quizAnswers = {};
+    this.quizResult = null;
+    this.quizResultByQuestion = {};
+    this.quizSubmitting = false;
+    this.quizMessage = '';
+  }
+
+  private findQuizOverview(topicId: string): QuizOverviewItem | undefined {
+    return this.quizOverview.find((item) => item.topicId === topicId);
+  }
+
+  /** 提交后把本次成绩写回概览,使专题列表徽标即时更新(登录取最佳分,匿名取本次分)。 */
+  private applyQuizScoreToOverview(result: QuizSubmitResult): void {
+    const item = this.findQuizOverview(result.topicId);
+    const shownScore = result.persisted && result.bestScore !== null ? result.bestScore : result.score;
+    if (item) {
+      item.bestScore = shownScore;
+      item.correctCount = result.correctCount;
+      item.totalCount = result.total;
+      item.completed = true;
+    }
+  }
+
+  private loadQuizOverview(): void {
+    this.quizOverviewLoading = true;
+    // 独立订阅 + 失败兜底:概览拉取失败不影响整页,也不清空已有徽标
+    const sub = this.quizApi.getOverview().subscribe({
+      next: (overview) => {
+        this.quizOverview = overview;
+        this.quizOverviewLoading = false;
+      },
+      error: () => {
+        this.quizOverviewLoading = false;
+      }
+    });
+    this.subscriptions.add(sub);
+  }
+
   labelFor(learningType: string): string {
     return learningTypeLabels[learningType] ?? learningType;
   }
@@ -2403,11 +2976,30 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
       this.registerMessage = '两次输入的密码不一致。';
       return;
     }
-    this.registerMessage = '注册表单已完成展示；当前后端尚未提供注册接口，请先使用 student / 123456 登录。';
+    this.registerMessage = '注册中…';
+    const sub = this.authApi.register({
+      username: this.registerUsername.trim(),
+      email: this.registerEmail.trim(),
+      password: this.registerPassword
+    }).subscribe({
+      next: (user) => {
+        this.registerMessage = '';
+        this.registerUsername = '';
+        this.registerEmail = '';
+        this.registerPassword = '';
+        this.registerPasswordConfirm = '';
+        this.handleLogin(user);
+      },
+      error: (error: unknown) => {
+        this.registerMessage = error instanceof Error ? error.message : '注册失败，请稍后重试。';
+      }
+    });
+    this.subscriptions.add(sub);
   }
 
   handleLogin(user: UserProfile): void {
     this.currentUser = user;
+    this.authSession.setSession(user);
     this.saveMessage = `欢迎回来，${user.displayName}。`;
     this.loadHistory();
     this.setPage('dashboard');
@@ -2415,6 +3007,7 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
 
   handleLogout(): void {
     this.currentUser = null;
+    this.authSession.clear();
     this.experimentHistory = [];
     this.saveMessage = '已退出登录。';
     this.setPage('home');
@@ -2579,6 +3172,9 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
     const allPages: PageKey[] = ['home', 'auth', ...this.appNavItems.map((item) => item.key)];
     if (allPages.includes(hash)) {
       this.activePage = hash;
+      if (hash === 'quiz') {
+        this.prepareQuizEntry();
+      }
     }
   }
 

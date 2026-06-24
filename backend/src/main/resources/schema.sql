@@ -27,6 +27,9 @@ CREATE TABLE IF NOT EXISTS app_user (
     created_at TIMESTAMP NOT NULL
 );
 
+-- 给已存在的库补 email 列(幂等),注册落库邮箱用
+ALTER TABLE app_user ADD COLUMN IF NOT EXISTS email VARCHAR(128);
+
 CREATE TABLE IF NOT EXISTS dataset_meta (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     code VARCHAR(64) NOT NULL UNIQUE,
@@ -73,6 +76,31 @@ CREATE TABLE IF NOT EXISTS dataset_data (
     label_column VARCHAR(64),
     created_at TIMESTAMP NOT NULL,
     CONSTRAINT fk_dataset_data_meta FOREIGN KEY (dataset_id) REFERENCES dataset_meta(id)
+);
+
+-- 练习题题库:每行一道单选题,topic_id 对应前端课程路径节点 id(如 data-feature)
+CREATE TABLE IF NOT EXISTS quiz_question (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    topic_id VARCHAR(64) NOT NULL,
+    category VARCHAR(64) NOT NULL,
+    question VARCHAR(512) NOT NULL,
+    options_json CLOB NOT NULL,
+    correct_index INT NOT NULL,
+    explanation VARCHAR(512),
+    display_order INT NOT NULL,
+    created_at TIMESTAMP NOT NULL
+);
+
+-- 学生练习成绩:每个用户每个专题保留一条最佳成绩
+CREATE TABLE IF NOT EXISTS quiz_score (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    topic_id VARCHAR(64) NOT NULL,
+    best_score INT NOT NULL,
+    correct_count INT NOT NULL,
+    total_count INT NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    CONSTRAINT uk_quiz_score_user_topic UNIQUE (user_id, topic_id)
 );
 
 CREATE TABLE IF NOT EXISTS experiment_case (

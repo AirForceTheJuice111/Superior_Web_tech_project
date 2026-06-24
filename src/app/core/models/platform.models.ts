@@ -175,3 +175,53 @@ export interface TrainingSessionSummary {
   status: string;
   currentStep: number;
 }
+
+// ---- 练习题(Quiz)----
+
+/** 单题(不含正确答案,答案由后端判分) */
+export interface QuizQuestion {
+  id: number;
+  topicId: string;
+  question: string;
+  options: string[];
+  displayOrder: number;
+}
+
+/** 专题概览:题量 + 当前登录用户的最佳成绩(bestScore 为 null 表示未测验) */
+export interface QuizOverviewItem {
+  topicId: string;
+  category: string;
+  questionCount: number;
+  bestScore: number | null;
+  correctCount: number | null;
+  totalCount: number | null;
+  completed: boolean;
+}
+
+export interface QuizAnswer {
+  questionId: number;
+  selectedIndex: number | null;
+}
+
+export interface QuizSubmitRequest {
+  topicId: string;
+  answers: QuizAnswer[];
+}
+
+export interface QuizSubmitDetail {
+  questionId: number;
+  selectedIndex: number | null;
+  correctIndex: number;
+  correct: boolean;
+  explanation: string | null;
+}
+
+export interface QuizSubmitResult {
+  topicId: string;
+  score: number;
+  correctCount: number;
+  total: number;
+  bestScore: number | null;
+  persisted: boolean;
+  details: QuizSubmitDetail[];
+}
