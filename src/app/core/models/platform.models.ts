@@ -225,3 +225,12 @@ export interface QuizSubmitResult {
   persisted: boolean;
   details: QuizSubmitDetail[];
 }
+
+// ---- 实时聊天室 ----
+
+export interface ChatMessage {
+  id?: number;
+  senderName: string;
+  content: string;
+  createdAt: string;
+}

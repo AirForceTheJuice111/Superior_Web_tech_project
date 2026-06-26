@@ -127,7 +127,7 @@ interface DecisionTreeNode {
           </div>
         </article>
 
-        <article class="explain-block" *ngIf="distributionItems.length > 0">
+        <article class="explain-block" *ngIf="distributionItems.length > 0 && algorithm !== 'linear_regression'">
           <div class="block-header">
             <h4>{{ distributionTitle }}</h4>
             <span>{{ sampleCount }} 个样本</span>

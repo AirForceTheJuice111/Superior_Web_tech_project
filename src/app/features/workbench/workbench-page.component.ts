@@ -1,11 +1,12 @@
 import { CommonModule } from '@angular/common';
-import { Component, HostListener, OnDestroy, OnInit } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit, effect } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Subscription, forkJoin } from 'rxjs';
 
-import { AlgorithmMeta, CustomDatasetPayload, DatasetMeta, ExperimentCase, ExperimentConfig, ExperimentRecord, LearningType, ParamValue, QuizOverviewItem, QuizQuestion, QuizSubmitDetail, QuizSubmitResult, TrainingSessionSummary, UserProfile } from '../../core/models/platform.models';
+import { AlgorithmMeta, ChatMessage, CustomDatasetPayload, DatasetMeta, ExperimentCase, ExperimentConfig, ExperimentRecord, LearningType, ParamValue, QuizOverviewItem, QuizQuestion, QuizSubmitDetail, QuizSubmitResult, TrainingSessionSummary, UserProfile } from '../../core/models/platform.models';
 import { CatalogApiService } from '../../core/services/catalog-api.service';
 import { QuizApiService } from '../../core/services/quiz-api.service';
+import { ChatSocketService } from '../../core/services/chat-socket.service';
 import { ExperimentContextService } from '../../core/services/experiment-context.service';
 import { ExperimentCaseApiService } from '../../core/services/experiment-case-api.service';
 import { ExperimentApiService } from '../../core/services/experiment-api.service';
@@ -13,12 +14,12 @@ import { AuthApiService } from '../../core/services/auth-api.service';
 import { AuthSessionService } from '../../core/services/auth-session.service';
 import { LoginPanelComponent } from '../auth/login-panel.component';
 import { ExperimentCaseLibraryPanelComponent } from '../cases/experiment-case-library-panel.component';
-import { ModelComparisonPanelComponent } from '../comparison/model-comparison-panel.component';
+import { AlgorithmComparisonPanelComponent } from '../comparison/algorithm-comparison-panel.component';
 import { ExperimentConfigPanelComponent } from '../config/experiment-config-panel.component';
 import { ExperimentHistoryPanelComponent } from '../history/experiment-history-panel.component';
 import { TrainingControlPanelComponent } from '../training/training-control-panel.component';
 
-type PageKey = 'home' | 'auth' | 'dashboard' | 'paths' | 'theory' | 'lab' | 'analysis' | 'datasets' | 'quiz' | 'profile';
+type PageKey = 'home' | 'auth' | 'dashboard' | 'paths' | 'theory' | 'lab' | 'analysis' | 'datasets' | 'quiz' | 'chat' | 'profile';
 type AuthMode = 'login' | 'register';
 
 interface NavItem {
@@ -68,8 +69,8 @@ const learningTypeLabels: Record<string, string> = {
     CommonModule,
     FormsModule,
     LoginPanelComponent,
+    AlgorithmComparisonPanelComponent,
     ExperimentCaseLibraryPanelComponent,
-    ModelComparisonPanelComponent,
     ExperimentConfigPanelComponent,
     ExperimentHistoryPanelComponent,
     TrainingControlPanelComponent
@@ -453,6 +454,12 @@ const learningTypeLabels: Record<string, string> = {
             </section>
 
             <section *ngSwitchCase="'lab'" class="lab-page">
+              <div class="lab-mode-tabs">
+                <button type="button" [class.active]="labMode === 'single'" (click)="labMode = 'single'">单算法演示</button>
+                <button type="button" [class.active]="labMode === 'compare'" (click)="labMode = 'compare'">算法对比</button>
+              </div>
+
+              <ng-container *ngIf="labMode === 'single'">
               <section class="lab-top">
                 <label>
                   <span>实验名称</span>
@@ -540,32 +547,16 @@ const learningTypeLabels: Record<string, string> = {
                   <span>实验保存状态</span>
                 </article>
               </section>
+              </ng-container>
+
+              <app-algorithm-comparison-panel
+                *ngIf="labMode === 'compare'"
+                [datasets]="datasets"
+                [algorithms]="algorithms"
+              ></app-algorithm-comparison-panel>
             </section>
 
             <section *ngSwitchCase="'analysis'" class="analysis-page">
-              <div class="split-layout">
-                <section class="content-card">
-                  <span class="eyebrow">Records</span>
-                  <h2>我的实验记录</h2>
-                  <p>这里集中展示历史实验与模型对比。点击历史记录可以回填配置并回到算法实验室。</p>
-                  <div class="result-summary">
-                    <div>
-                      <strong>{{ latestSessionId || '暂无 Session' }}</strong>
-                      <span>最近训练会话</span>
-                    </div>
-                    <div>
-                      <strong>{{ selectedAlgorithmName }}</strong>
-                      <span>当前分析算法</span>
-                    </div>
-                  </div>
-                </section>
-
-                <app-model-comparison-panel
-                  [config]="activeConfig"
-                  [algorithms]="algorithms"
-                ></app-model-comparison-panel>
-              </div>
-
               <app-experiment-history-panel
                 [experiments]="experimentHistory"
                 [loading]="historyLoading"
@@ -711,6 +702,40 @@ const learningTypeLabels: Record<string, string> = {
                   <button class="ghost-action" type="button" *ngIf="quizResult" (click)="backToQuizTopics()">返回专题</button>
                 </div>
                 <p class="quiz-message" *ngIf="quizMessage">{{ quizMessage }}</p>
+              </section>
+            </section>
+
+            <section *ngSwitchCase="'chat'" class="chat-page">
+              <section class="chat-window">
+                <header class="chat-window-head">
+                  <div>
+                    <h2>实时聊天室</h2>
+                    <span class="chat-sub">与当前在线的同学实时交流</span>
+                  </div>
+                  <span class="chat-online">● 在线 {{ chat.online() }}</span>
+                </header>
+
+                <div class="chat-window-body" id="chat-scroll">
+                  <p class="chat-window-empty" *ngIf="chat.messages().length === 0">还没有消息，来说第一句吧。</p>
+                  <div class="chat-bubble-row" *ngFor="let m of chat.messages()" [class.self]="isSelfMessage(m)">
+                    <div class="chat-bubble-wrap">
+                      <span class="chat-bubble-name" *ngIf="!isSelfMessage(m)">{{ m.senderName }}</span>
+                      <div class="chat-bubble">{{ m.content }}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <footer class="chat-window-foot" *ngIf="currentUser; else chatFootLogin">
+                  <input [(ngModel)]="chatDraft" (keyup.enter)="sendChat()" maxlength="500" placeholder="输入消息，回车发送…" />
+                  <button class="primary-action" type="button" (click)="sendChat()">发送</button>
+                </footer>
+                <ng-template #chatFootLogin>
+                  <footer class="chat-window-foot chat-foot-hint">
+                    <span>登录后即可参与聊天</span>
+                    <button class="primary-action" type="button" (click)="setPage('auth')">去登录</button>
+                  </footer>
+                </ng-template>
+                <p class="chat-window-err" *ngIf="chat.lastError()">{{ chat.lastError() }}</p>
               </section>
             </section>
 
@@ -1164,6 +1189,95 @@ const learningTypeLabels: Record<string, string> = {
       min-width: 0;
       overflow: hidden;
     }
+
+    /* ---- 实时聊天室页(微信/QQ 风格对话窗口) ---- */
+    .chat-page {
+      width: 100%;
+      min-width: 0;
+      height: calc(100vh - 170px);
+      min-height: 460px;
+    }
+
+    .chat-window {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      background: #ffffff;
+      border: 1px solid var(--border-strong, #e5e7eb);
+      border-radius: 18px;
+      overflow: hidden;
+    }
+
+    .chat-window-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border-strong, #eef0f3);
+    }
+
+    .chat-window-head h2 { margin: 0; font-size: 18px; }
+    .chat-sub { font-size: 12px; color: var(--text-muted, #6b7280); }
+    .chat-online { font-size: 13px; color: #2f8f6c; font-weight: 700; white-space: nowrap; }
+
+    .chat-window-body {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      background: #f5f6f8;
+    }
+
+    .chat-window-empty { margin: auto; color: var(--text-muted, #9ca3af); font-size: 13px; }
+
+    .chat-bubble-row { display: flex; justify-content: flex-start; }
+    .chat-bubble-row.self { justify-content: flex-end; }
+
+    .chat-bubble-wrap { display: flex; flex-direction: column; max-width: 70%; gap: 3px; }
+    .chat-bubble-name { font-size: 11px; color: var(--text-muted, #8a94a6); padding-left: 4px; }
+
+    .chat-bubble {
+      padding: 9px 13px;
+      border-radius: 12px;
+      background: #ffffff;
+      border: 1px solid var(--border-strong, #e8eaed);
+      color: var(--text, #1c2024);
+      font-size: 14px;
+      line-height: 1.5;
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+
+    .chat-bubble-row.self .chat-bubble {
+      background: #95ec69;
+      border-color: #95ec69;
+      color: #1a2b16;
+    }
+
+    .chat-window-foot {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding: 14px 20px;
+      border-top: 1px solid var(--border-strong, #eef0f3);
+    }
+
+    .chat-window-foot input {
+      flex: 1;
+      min-width: 0;
+      padding: 10px 14px;
+      border: 1px solid var(--border-strong, #e5e7eb);
+      border-radius: 10px;
+      font-size: 14px;
+    }
+
+    .chat-window-foot .primary-action { white-space: nowrap; }
+    .chat-foot-hint { justify-content: space-between; color: var(--text-muted, #6b7280); font-size: 13px; }
+    .chat-window-err { margin: 0; padding: 0 20px 12px; color: #c0392b; font-size: 12px; }
 
     .sidebar-top {
       display: grid;
@@ -1742,6 +1856,28 @@ const learningTypeLabels: Record<string, string> = {
     .lab-page {
       width: 100%;
       min-width: 0;
+    }
+
+    .lab-mode-tabs {
+      display: flex;
+      gap: 8px;
+      margin: 4px 0 16px;
+    }
+
+    .lab-mode-tabs button {
+      padding: 8px 16px;
+      border: 1px solid var(--border-strong, #e5e7eb);
+      background: #fff;
+      border-radius: 999px;
+      cursor: pointer;
+      font-weight: 700;
+      color: var(--text-muted, #6b7280);
+    }
+
+    .lab-mode-tabs button.active {
+      background: #1c2024;
+      color: #fff;
+      border-color: #1c2024;
     }
 
     .lab-top {
@@ -2353,6 +2489,7 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
     { key: 'lab', label: '算法实验室', eyebrow: 'Lab', icon: '◇' },
     { key: 'analysis', label: '我的实验记录', eyebrow: 'Records', icon: '▤' },
     { key: 'quiz', label: '练习题', eyebrow: 'Quiz', icon: '✓' },
+    { key: 'chat', label: '实时聊天室', eyebrow: 'Chat', icon: '💬' },
     { key: 'profile', label: '个人中心', eyebrow: 'Profile', icon: '○' },
     { key: 'theory', label: '算法教学', eyebrow: 'Theory', icon: 'ƒ' },
     { key: 'datasets', label: '数据集广场', eyebrow: 'Data', icon: '▦' }
@@ -2403,6 +2540,11 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
       eyebrow: '练习题 / 测验页面',
       title: '练习题',
       description: '用轻量练习检查概念理解和实验判断。'
+    },
+    chat: {
+      eyebrow: '实时聊天室',
+      title: '实时聊天室',
+      description: '与当前在线的同学实时交流，登录后即可发言。'
     },
     profile: {
       eyebrow: '个人中心',
@@ -2583,6 +2725,12 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
   sidebarCollapsed = false;
   selectedPathNode: PathNode = this.pathGroups[0].nodes[0];
 
+  // 算法实验室模式:单算法演示 / 算法对比
+  labMode: 'single' | 'compare' = 'single';
+
+  // 侧边栏实时聊天室输入
+  chatDraft = '';
+
   // 练习题三级下钻状态:大类 -> 专题 -> 试题
   quizView: 'categories' | 'topics' | 'questions' = 'categories';
   quizSelectedGroup: PathGroup | null = null;
@@ -2620,8 +2768,17 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
     private readonly experimentContext: ExperimentContextService,
     private readonly authApi: AuthApiService,
     private readonly authSession: AuthSessionService,
-    private readonly quizApi: QuizApiService
-  ) {}
+    private readonly quizApi: QuizApiService,
+    readonly chat: ChatSocketService
+  ) {
+    // 在聊天页时,消息变化后自动滚到底部(像微信那样)
+    effect(() => {
+      this.chat.messages();
+      if (this.activePage === 'chat' && typeof window !== 'undefined') {
+        setTimeout(() => this.scrollChatToBottom(), 0);
+      }
+    });
+  }
 
   get currentPageMeta(): PageMeta {
     return this.pageMeta[this.activePage];
@@ -2743,6 +2900,7 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
     this.syncPageFromHash();
     this.applyResponsiveSidebarDefault();
     this.loadCatalogs();
+    this.chat.connect(this.authSession.token);
   }
 
   /** 刷新后从持久化会话恢复登录态,使 Authorization 头与 currentUser 保持一致。 */
@@ -2772,6 +2930,9 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
     this.activePage = page;
     if (page === 'quiz') {
       this.prepareQuizEntry();
+    }
+    if (page === 'chat' && typeof window !== 'undefined') {
+      setTimeout(() => this.scrollChatToBottom(), 0);
     }
     if (typeof window !== 'undefined') {
       window.history.replaceState(null, '', `#${page}`);
@@ -3002,6 +3163,7 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
     this.authSession.setSession(user);
     this.saveMessage = `欢迎回来，${user.displayName}。`;
     this.loadHistory();
+    this.chat.reconnectWithToken(this.authSession.token);
     this.setPage('dashboard');
   }
 
@@ -3010,7 +3172,31 @@ export class WorkbenchPageComponent implements OnInit, OnDestroy {
     this.authSession.clear();
     this.experimentHistory = [];
     this.saveMessage = '已退出登录。';
+    this.chat.reconnectWithToken(null);
     this.setPage('home');
+  }
+
+  sendChat(): void {
+    const text = this.chatDraft.trim();
+    if (!text) {
+      return;
+    }
+    this.chat.send(text);
+    this.chatDraft = '';
+  }
+
+  isSelfMessage(message: ChatMessage): boolean {
+    return !!this.currentUser && message.senderName === this.currentUser.displayName;
+  }
+
+  private scrollChatToBottom(): void {
+    if (typeof document === 'undefined') {
+      return;
+    }
+    const el = document.getElementById('chat-scroll');
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+    }
   }
 
   handleConfigChange(config: ExperimentConfig): void {

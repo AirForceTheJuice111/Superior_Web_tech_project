@@ -78,6 +78,15 @@ CREATE TABLE IF NOT EXISTS dataset_data (
     CONSTRAINT fk_dataset_data_meta FOREIGN KEY (dataset_id) REFERENCES dataset_meta(id)
 );
 
+-- 实时聊天室消息:sender_user_id 为空表示匿名(当前仅登录用户可发言)
+CREATE TABLE IF NOT EXISTS chat_message (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    sender_user_id BIGINT,
+    sender_name VARCHAR(64) NOT NULL,
+    content VARCHAR(500) NOT NULL,
+    created_at TIMESTAMP NOT NULL
+);
+
 -- 练习题题库:每行一道单选题,topic_id 对应前端课程路径节点 id(如 data-feature)
 CREATE TABLE IF NOT EXISTS quiz_question (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
